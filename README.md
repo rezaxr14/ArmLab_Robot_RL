@@ -65,7 +65,7 @@ Follow these steps to get the project running on your local machine.
 1.  **Clone the repository:**
     ```bash
     git clone [https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git)
-    cd your-repo-name
+    cd 3D-Robot-Control-RL-Analytical
     ```
 
 2.  **Create a virtual environment (recommended):**
