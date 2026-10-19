@@ -1,0 +1,32 @@
+# --- Implementation plan (never commit) ---
+implementation_plan.md
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# --- Test / tooling caches ---
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Local artifacts (results, checkpoints, media) ---
+artifacts/
+*.pth
+!RL_Double_Dueling_DQN/qnetwork.pth
+*.mp4
+*.gif
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

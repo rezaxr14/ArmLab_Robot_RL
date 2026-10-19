@@ -1,4 +1,19 @@
-numpy
-gymnasium
-torch
-matplotlib
+# Base installation: analytical kinematics, controllers, kinematic env,
+# evaluation tools, and non-physics demos/tests.
+# (For editable install of the armlab package itself, run: pip install -e .)
+numpy>=1.24
+gymnasium>=0.29
+matplotlib>=3.7
+
+# Reinforcement learning (also: pip install -e ".[rl]")
+torch>=2.0
+
+# Physics simulation (optional; also: pip install -e ".[physics]")
+# mujoco>=3.0
+
+# Dashboard (optional; also: pip install -e ".[dashboard]")
+# dash>=2.14
+# plotly>=5.18
+
+# Development / tests (also: pip install -e ".[dev]")
+pytest>=7.4
