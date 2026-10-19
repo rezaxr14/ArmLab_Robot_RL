@@ -251,9 +251,10 @@ class PhysicsParams:
     success_threshold: float = 0.2
     action_scale: float = 5.0             # rad/s per unit of [-1, 1] action
     contact_termination: bool = True
-    exclude_pairs: Tuple[Tuple[str, str], ...] = field(
-        default=(("base", "floor"), ("link1", "floor"))
-    )
+    # Body-pair contact excludes for the MJCF (body names). The base column
+    # is separated from the floor via geom contype flags in the model
+    # builder instead, because world geoms cannot appear in <exclude>.
+    exclude_pairs: Tuple[Tuple[str, str], ...] = field(default=())
 
     def __post_init__(self) -> None:
         _check_positive("sim_dt", self.sim_dt)
