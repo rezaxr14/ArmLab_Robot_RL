@@ -22,8 +22,7 @@ class TestModel:
         assert model.nu == 3
 
     def test_joint_limits_in_model(self):
-        robot = RobotParams(joint_limits_low=(-1.0, -0.5, -2.0),
-                            joint_limits_high=(1.0, 0.5, 2.0))
+        robot = RobotParams(joint_limits_low=(-1.0, -0.5, -2.0), joint_limits_high=(1.0, 0.5, 2.0))
         model = mujoco.MjModel.from_xml_string(build_arm_xml(robot))
         np.testing.assert_allclose(model.jnt_range[0], [-1.0, 1.0])
         np.testing.assert_allclose(model.jnt_range[1], [-0.5, 0.5])

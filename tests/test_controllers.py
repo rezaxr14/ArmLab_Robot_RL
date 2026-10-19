@@ -28,9 +28,9 @@ def _distance(kin, q, target):
 class TestDiscreteArgmax:
     def test_picks_correct_joint_direction(self):
         step = np.deg2rad(5)
-        assert discrete_argmax(np.array([0.1, 0.0, 0.0]), step) == 0   # joint 0 +
+        assert discrete_argmax(np.array([0.1, 0.0, 0.0]), step) == 0  # joint 0 +
         assert discrete_argmax(np.array([-0.1, 0.0, 0.0]), step) == 1  # joint 0 -
-        assert discrete_argmax(np.array([0.0, 0.0, 0.1]), step) == 4   # joint 2 +
+        assert discrete_argmax(np.array([0.0, 0.0, 0.1]), step) == 4  # joint 2 +
 
     def test_largest_magnitude_wins(self):
         step = np.deg2rad(5)
@@ -98,8 +98,13 @@ class TestCartesianDLS:
         obstacle = SphereObstacle(center=np.array([8.0, 0.0, 10.0]), radius=1.0)
         ctrl_free = CartesianDLSController(kin, kp=0.5, damping=0.05, max_dq=0.3)
         ctrl_obs = CartesianDLSController(
-            kin, kp=0.5, damping=0.05, max_dq=0.3,
-            obstacles=[obstacle], repulse_gain=3.0, influence_radius=5.0,
+            kin,
+            kp=0.5,
+            damping=0.05,
+            max_dq=0.3,
+            obstacles=[obstacle],
+            repulse_gain=3.0,
+            influence_radius=5.0,
         )
         target = np.array([14.0, 0.0, 10.0])
         q_free = np.zeros(3)

@@ -31,6 +31,15 @@ class TestFK:
         with pytest.raises(ValueError):
             kin.end_effector(np.array([np.nan, 0.0, 0.0]))
 
+    def test_fk_is_stateless(self, kin):
+        q1 = np.array([0.1, 0.2, 0.3])
+        q2 = np.array([-0.4, 0.5, -0.6])
+        first = kin.link_positions(q1)
+        kin.link_positions(q2)  # an unrelated call must not change the result
+        second = kin.link_positions(q1)
+        np.testing.assert_array_equal(first, second)
+        assert kin.params == RobotParams()
+
 
 class TestIK:
     def test_round_trip_random(self, kin):
@@ -77,6 +86,23 @@ class TestIK:
     def test_bad_elbow_arg(self, kin):
         with pytest.raises(ValueError):
             kin.inverse_kinematics(np.array([10, 0, 10]), elbow="sideways")
+
+    def test_rejects_non_triple_shapes(self, kin):
+        with pytest.raises(ValueError):
+            kin.inverse_kinematics(np.zeros((1, 3)))
+
+    def test_shoulder_singularity_equal_links(self):
+        # l2 == l3 and the target is exactly at the shoulder: the arm folds
+        # back on itself (elbow = pi) and any theta2 works. This must be a
+        # deliberate singular path, not a division by D = 0.
+        kin = RobotKinematics(RobotParams(link_lengths=(5.0, 5.0, 5.0)))
+        target = np.array([0.0, 0.0, kin.l1])
+        res = kin.inverse_kinematics(target, q_current=np.array([0.4, 0.7, 0.1]))
+        assert res.reachable
+        assert res.solution is not None
+        assert np.all(np.isfinite(res.solution))
+        assert res.residual < 1e-6
+        assert res.solution[1] == pytest.approx(0.7)
 
 
 class TestJacobian:

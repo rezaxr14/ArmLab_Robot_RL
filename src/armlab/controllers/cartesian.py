@@ -14,8 +14,8 @@ planner with completeness (RRT).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Optional, Sequence
 
 import numpy as np
 
@@ -58,9 +58,13 @@ class CartesianDLSController(Controller):
         kp: float = 0.6,
         damping: float = 0.08,
         max_dq: float = 0.25,
-        obstacles: Optional[Sequence[SphereObstacle]] = None,
+        obstacles: Sequence[SphereObstacle] | None = None,
         repulse_gain: float = 0.8,
         influence_radius: float = 3.0,
+        joint_limits: Sequence[Sequence[float]] | None = None,
+        limit_epsilon: float = 1e-6,
+        limit_avoidance_gain: float = 0.0,
+        limit_avoidance_band: float = 0.2,
     ) -> None:
         if kp < 0 or damping < 0 or max_dq < 0:
             raise ValueError("kp, damping, and max_dq must be non-negative.")
@@ -73,6 +77,55 @@ class CartesianDLSController(Controller):
         self.obstacles = list(obstacles) if obstacles else []
         self.repulse_gain = float(repulse_gain)
         self.influence_radius = float(influence_radius)
+        if joint_limits is None:
+            self.joint_limits = None
+        else:
+            low = np.asarray(joint_limits[0], dtype=float).reshape(3)
+            high = np.asarray(joint_limits[1], dtype=float).reshape(3)
+            if np.any(low >= high):
+                raise ValueError("joint_limits low must be strictly less than high.")
+            self.joint_limits = (low, high)
+        self.limit_epsilon = float(limit_epsilon)
+        if limit_avoidance_gain < 0 or limit_avoidance_band <= 0:
+            raise ValueError("limit_avoidance_gain must be >= 0 and band > 0.")
+        self.limit_avoidance_gain = float(limit_avoidance_gain)
+        self.limit_avoidance_band = float(limit_avoidance_band)
+
+    def _dls(self, q: np.ndarray, dx: np.ndarray) -> np.ndarray:
+        """Damped least squares, projecting out joints locked at their limits.
+
+        Clamping the commanded joint velocity at a limit is not enough: the
+        local solver keeps pushing a saturated joint and stalls (a well-known
+        resolved-rate failure). Locked-at-limit joints are removed from the
+        Jacobian and the remaining joints are re-solved, which lets the
+        controller route motion through the free joints instead.
+        """
+        if self.joint_limits is None:
+            return self.kin.damped_least_squares(q, dx, damping=self.damping)
+
+        low, high = self.joint_limits
+        free = np.ones(3, dtype=bool)
+        dq = np.zeros(3)
+        for _ in range(3):
+            J = self.kin.jacobian(q)[:, free]
+            A = J @ J.T + (self.damping**2) * np.eye(3)
+            dq_free = J.T @ np.linalg.solve(A, dx)
+            dq = np.zeros(3)
+            dq[free] = dq_free
+            locked = self._locked_joints(q, dq, low, high)
+            locked = locked & free  # only newly lock a currently free joint
+            if not np.any(locked):
+                break
+            free = free & ~locked
+            if not np.any(free):
+                return np.zeros(3)
+        return dq
+
+    def _locked_joints(
+        self, q: np.ndarray, dq: np.ndarray, low: np.ndarray, high: np.ndarray
+    ) -> np.ndarray:
+        eps = self.limit_epsilon
+        return ((q <= low + eps) & (dq < 0.0)) | ((q >= high - eps) & (dq > 0.0))
 
     def act(self, q: np.ndarray, target: np.ndarray) -> np.ndarray:
         q = np.asarray(q, dtype=float).reshape(3)
@@ -81,8 +134,29 @@ class CartesianDLSController(Controller):
         v_track = self.kp * (target - ee)
         v_repulse = self._repulsive_velocity(ee)
         dx = v_track + v_repulse
-        dq = self.kin.damped_least_squares(q, dx, damping=self.damping)
+        dq = self._dls(q, dx)
+        if self.joint_limits is not None and self.limit_avoidance_gain > 0:
+            dq = dq + self._limit_avoidance(q)
         return np.clip(dq, -self.max_dq, self.max_dq)
+
+    def _limit_avoidance(self, q: np.ndarray) -> np.ndarray:
+        """Small joint-space bias away from joint limits.
+
+        When the local task needs a joint that is already saturated, this bias
+        nudges the arm off the limit so the solver can re-plan through the free
+        joints on the next step instead of stalling at the boundary.
+        """
+        low, high = self.joint_limits  # type: ignore[misc]
+        band = self.limit_avoidance_band
+        bias = np.zeros(3)
+        for j in range(3):
+            d_low = q[j] - low[j]
+            d_high = high[j] - q[j]
+            if d_low < band:
+                bias[j] += self.limit_avoidance_gain * (band - d_low)
+            if d_high < band:
+                bias[j] -= self.limit_avoidance_gain * (band - d_high)
+        return bias
 
     def _repulsive_velocity(self, ee: np.ndarray) -> np.ndarray:
         """Sum of repulsive Cartesian velocities from nearby obstacles."""

@@ -13,6 +13,7 @@ from armlab.controllers.base import Controller, DiscreteActionAdapter, discrete_
 from armlab.controllers.cartesian import CartesianDLSController, SphereObstacle
 from armlab.controllers.joint import JointPDController, JointPositionController
 from armlab.controllers.mpc import ShootingMPCController
+from armlab.controllers.planner import RRTPlannerController
 
 __all__ = [
     "Controller",
@@ -22,5 +23,6 @@ __all__ = [
     "SphereObstacle",
     "JointPDController",
     "JointPositionController",
+    "RRTPlannerController",
     "ShootingMPCController",
 ]

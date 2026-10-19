@@ -9,8 +9,9 @@ Units: meters, radians, seconds, kilograms. Angles are stored in radians.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any, Mapping, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -23,7 +24,7 @@ __all__ = [
 ]
 
 
-def _triple(name: str, value: Tuple[float, float, float]) -> Tuple[float, float, float]:
+def _triple(name: str, value: tuple[float, float, float]) -> tuple[float, float, float]:
     arr = np.asarray(value, dtype=float)
     if arr.shape != (3,):
         raise ValueError(f"{name} must contain exactly 3 values, got shape {arr.shape}.")
@@ -52,9 +53,9 @@ class RobotParams:
             (0 = fully extended in a straight line).
     """
 
-    link_lengths: Tuple[float, float, float] = (5.0, 10.0, 8.0)
-    joint_limits_low: Tuple[float, float, float] = (-np.pi, -np.pi / 2, -np.pi)
-    joint_limits_high: Tuple[float, float, float] = (np.pi, np.pi / 2, np.pi)
+    link_lengths: tuple[float, float, float] = (5.0, 10.0, 8.0)
+    joint_limits_low: tuple[float, float, float] = (-np.pi, -np.pi / 2, -np.pi)
+    joint_limits_high: tuple[float, float, float] = (np.pi, np.pi / 2, np.pi)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "link_lengths", _triple("link_lengths", self.link_lengths))
@@ -89,21 +90,36 @@ class RobotParams:
 
 @dataclass(frozen=True)
 class RewardParams:
-    """Reward shaping parameters for the reaching environment."""
+    """Reward shaping parameters for the reaching environment.
 
-    distance_penalty_scale: float = 0.1   # penalty = -scale * distance
+    The per-step reward is the sum of explicit components, all surfaced in
+    ``info["reward_components"]`` (implementation plan C4):
+
+    - ``progress``: ``progress_scale * (prev_distance - distance)``.
+    - ``distance``: ``-distance_penalty_scale * distance``.
+    - ``action_cost``: ``-action_penalty * |action|``.
+    - ``time_cost``: ``-time_penalty``.
+    - ``success``: ``success_bonus`` when the target is reached (terminal).
+    - ``limit_penalty``: ``-limit_penalty`` per step at a joint limit.
+    """
+
+    distance_penalty_scale: float = 0.1  # penalty = -scale * distance
+    progress_scale: float = 1.0  # reward = scale * distance improvement
     success_bonus: float = 100.0
-    success_threshold: float = 1.0        # meters; EE within this = success
-    time_penalty: float = 0.0             # per-step penalty (>= 0)
-    action_penalty: float = 0.0           # per-step penalty * |action|
+    success_threshold: float = 1.0  # length units; EE within this = success
+    time_penalty: float = 0.0  # per-step penalty (>= 0)
+    action_penalty: float = 0.0  # per-step penalty * |action|
+    limit_penalty: float = 0.0  # per-step penalty at a joint limit
     success_terminates: bool = True
 
     def __post_init__(self) -> None:
         _check_non_negative("distance_penalty_scale", self.distance_penalty_scale)
+        _check_non_negative("progress_scale", self.progress_scale)
         _check_non_negative("success_bonus", self.success_bonus)
         _check_positive("success_threshold", self.success_threshold)
         _check_non_negative("time_penalty", self.time_penalty)
         _check_non_negative("action_penalty", self.action_penalty)
+        _check_non_negative("limit_penalty", self.limit_penalty)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -119,16 +135,21 @@ class EnvParams:
     direction ``+1`` if ``a % 2 == 0`` else ``-1``.
     """
 
-    control_mode: str = "discrete"        # "discrete" | "continuous"
+    control_mode: str = "discrete"  # "discrete" | "continuous"
     action_step_size: float = np.deg2rad(5.0)
     continuous_action_scale: float = np.deg2rad(5.0)
     max_episode_steps: int = 250
     action_repeat: int = 1
-    target_min_radius: float = 6.0        # sampling annulus in horizontal plane
+    target_min_radius: float = 6.0  # sampling annulus in horizontal plane
     target_max_radius: float = 15.0
     target_min_height: float = 5.0
     target_max_height: float = 20.0
     observation_kind: str = "joint_ee_target"  # "joint_ee_target" | "relative"
+    #: Fraction of the reachable annulus excluded at both radial boundaries when
+    #: sampling the default (normal-control) scenario, so targets are not placed
+    #: on the singular inner/outer workspace boundary. Boundary/singularity
+    #: scenarios sample their own targets and ignore this.
+    target_annulus_margin: float = 0.05
 
     def __post_init__(self) -> None:
         if self.control_mode not in ("discrete", "continuous"):
@@ -152,6 +173,8 @@ class EnvParams:
         _check_non_negative("target_min_height", self.target_min_height)
         if self.target_max_height < self.target_min_height:
             raise ValueError("target_max_height must be >= target_min_height.")
+        if not 0.0 <= self.target_annulus_margin < 0.9:
+            raise ValueError("target_annulus_margin must be in [0, 0.9).")
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -174,23 +197,22 @@ class RLConfig:
     lr: float = 5e-4
     batch_size: int = 128
     buffer_size: int = 100_000
-    hidden_sizes: Tuple[int, ...] = (256, 256)
+    hidden_sizes: tuple[int, ...] = (256, 256)
     stream_hidden_size: int = 128
     epsilon_start: float = 1.0
     epsilon_min: float = 0.01
     epsilon_decay: float = 0.9995
     learn_every: int = 4
     gradient_clip: float = 10.0
-    target_update_mode: str = "soft"      # "soft" | "hard"
-    target_update_every: int = 500        # learn steps between hard updates
-    tau: float = 1e-3                     # Polyak coefficient for soft updates
+    target_update_mode: str = "soft"  # "soft" | "hard"
+    target_update_every: int = 500  # learn steps between hard updates
+    tau: float = 1e-3  # Polyak coefficient for soft updates
     min_buffer_samples: int = 64
 
     def __post_init__(self) -> None:
         if self.target_update_mode not in ("soft", "hard"):
             raise ValueError(
-                "target_update_mode must be 'soft' or 'hard', "
-                f"got {self.target_update_mode!r}."
+                f"target_update_mode must be 'soft' or 'hard', got {self.target_update_mode!r}."
             )
         _check_positive("gamma", self.gamma)
         if self.gamma > 1.0:
@@ -219,7 +241,7 @@ class RLConfig:
 
     def epsilon_at(self, step: int) -> float:
         """Epsilon after ``step`` environment steps."""
-        return max(self.epsilon_min, self.epsilon_start * (self.epsilon_decay ** step))
+        return max(self.epsilon_min, self.epsilon_start * (self.epsilon_decay**step))
 
     def as_dict(self) -> dict:
         d = asdict(self)
@@ -227,7 +249,7 @@ class RLConfig:
         return d
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "RLConfig":
+    def from_dict(cls, data: Mapping[str, Any]) -> RLConfig:
         data = dict(data)
         if "hidden_sizes" in data:
             data["hidden_sizes"] = tuple(data["hidden_sizes"])
@@ -249,12 +271,12 @@ class PhysicsParams:
     target_site_name: str = "target"
     ee_site_name: str = "ee"
     success_threshold: float = 0.2
-    action_scale: float = 5.0             # rad/s per unit of [-1, 1] action
+    action_scale: float = 5.0  # rad/s per unit of [-1, 1] action
     contact_termination: bool = True
     # Body-pair contact excludes for the MJCF (body names). The base column
     # is separated from the floor via geom contype flags in the model
     # builder instead, because world geoms cannot appear in <exclude>.
-    exclude_pairs: Tuple[Tuple[str, str], ...] = field(default=())
+    exclude_pairs: tuple[tuple[str, str], ...] = field(default=())
 
     def __post_init__(self) -> None:
         _check_positive("sim_dt", self.sim_dt)
@@ -273,4 +295,3 @@ class PhysicsParams:
         d = asdict(self)
         d["exclude_pairs"] = [list(p) for p in self.exclude_pairs]
         return d
-

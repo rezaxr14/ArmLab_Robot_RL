@@ -12,14 +12,28 @@ from __future__ import annotations
 
 import gymnasium as gym
 
+from armlab.config import EnvParams
 from armlab.envs.kinematic import KinematicReachingEnv
 from armlab.envs.moving import MovingTargetEnv
 
-__all__ = ["KinematicReachingEnv", "MovingTargetEnv", "register_envs"]
+__all__ = [
+    "KinematicReachingEnv",
+    "MovingTargetEnv",
+    "make_continuous_kinematic",
+    "register_envs",
+]
+
+
+def make_continuous_kinematic(**kwargs) -> KinematicReachingEnv:
+    """Factory for the continuous-action variant used by SAC."""
+    kwargs.setdefault("env_params", EnvParams(control_mode="continuous"))
+    return KinematicReachingEnv(**kwargs)
+
 
 _ENV_IDS = {
     "ArmLabKinematic-v0": KinematicReachingEnv,
     "ArmLabMovingTarget-v0": MovingTargetEnv,
+    "ArmLabKinematicContinuous-v0": make_continuous_kinematic,
 }
 
 

@@ -1,0 +1,20 @@
+# Static kinematic reaching task.
+scenario: static_reaching
+control_mode: discrete
+action_step_size: 0.08726646259971647   # 5 degrees, radians
+continuous_action_scale: 0.08726646259971647
+max_episode_steps: 250
+action_repeat: 1
+target_min_radius: 6.0
+target_max_radius: 15.0
+target_min_height: 5.0
+target_max_height: 20.0
+observation_kind: joint_ee_target
+
+reward:
+  distance_penalty_scale: 0.1
+  success_bonus: 100.0
+  success_threshold: 1.0
+  time_penalty: 0.0
+  action_penalty: 0.0
+  success_terminates: true

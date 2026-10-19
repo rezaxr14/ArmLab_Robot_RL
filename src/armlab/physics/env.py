@@ -17,15 +17,14 @@ instantiating this env without MuJoCo raises a clear installation message.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
+import gymnasium as gym
 import numpy as np
 
 from armlab.config import PhysicsParams, RewardParams, RobotParams
 from armlab.physics.model import build_arm_xml
 from armlab.targets import sample_uniform_reachable
-
-import gymnasium as gym
 
 __all__ = ["PhysicsReachingEnv", "MUJOCO_AVAILABLE"]
 
@@ -69,11 +68,11 @@ class PhysicsReachingEnv(gymnasium_env_base):
 
     def __init__(
         self,
-        robot_params: Optional[RobotParams] = None,
-        physics_params: Optional[PhysicsParams] = None,
-        reward_params: Optional[RewardParams] = None,
-        obstacles: Optional[list] = None,
-        render_mode: Optional[str] = None,
+        robot_params: RobotParams | None = None,
+        physics_params: PhysicsParams | None = None,
+        reward_params: RewardParams | None = None,
+        obstacles: list | None = None,
+        render_mode: str | None = None,
     ) -> None:
         self.robot_params = robot_params or RobotParams()
         self.physics_params = physics_params or PhysicsParams()
@@ -86,11 +85,13 @@ class PhysicsReachingEnv(gymnasium_env_base):
         self.data = mujoco.MjData(self.model)
 
         self._ee_site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE,
+            self.model,
+            mujoco.mjtObj.mjOBJ_SITE,
             self.physics_params.ee_site_name.encode(),
         )
         self._target_site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE,
+            self.model,
+            mujoco.mjtObj.mjOBJ_SITE,
             self.physics_params.target_site_name.encode(),
         )
         self._obstacle_names = [spec[0] for spec in xml_specs]
@@ -98,9 +99,9 @@ class PhysicsReachingEnv(gymnasium_env_base):
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
         reach = self.robot_params.base_height + self.robot_params.max_reach
         high = np.float32(reach + 1.0)
-        obs_high = np.concatenate(
-            [np.full(6, np.float32(np.pi * 2)), np.full(6, high)]
-        ).astype(np.float32)
+        obs_high = np.concatenate([np.full(6, np.float32(np.pi * 2)), np.full(6, high)]).astype(
+            np.float32
+        )
         self.observation_space = gym.spaces.Box(low=-obs_high, high=obs_high, dtype=np.float32)
 
         self.np_random = np.random.default_rng(0)
@@ -117,7 +118,7 @@ class PhysicsReachingEnv(gymnasium_env_base):
     def _set_target(self, pos: np.ndarray) -> None:
         self.data.mocap_pos[0] = np.asarray(pos, dtype=float)
 
-    def _collision_occurred(self) -> Tuple[bool, int, list]:
+    def _collision_occurred(self) -> tuple[bool, int, list]:
         """Return (collided, n_contacts, geom_name_pairs).
 
         Counts contacts between the two arm link geoms and anything else
@@ -132,7 +133,11 @@ class PhysicsReachingEnv(gymnasium_env_base):
             g1 = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1)
             g2 = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2)
             names = {g1, g2}
-            if (names & arm_names) and "base_geom" not in names and "floor" not in names - arm_names:
+            if (
+                (names & arm_names)
+                and "base_geom" not in names
+                and "floor" not in names - arm_names
+            ):
                 pairs.append((g1, g2))
         return bool(pairs), len(pairs), pairs
 
@@ -148,7 +153,7 @@ class PhysicsReachingEnv(gymnasium_env_base):
         return False
 
     # ------------------------------------------------------------ gym API
-    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
 
         mujoco.mj_resetData(self.model, self.data)
@@ -160,9 +165,7 @@ class PhysicsReachingEnv(gymnasium_env_base):
         if options and "target" in options:
             target = np.asarray(options["target"], dtype=float).reshape(3)
         else:
-            target = sample_uniform_reachable(
-                self.robot_params, _EnvShim(), self.np_random
-            )
+            target = sample_uniform_reachable(self.robot_params, _EnvShim(), self.np_random)
         self._set_target(target)
 
         mujoco.mj_forward(self.model, self.data)
@@ -192,13 +195,15 @@ class PhysicsReachingEnv(gymnasium_env_base):
             reward += rp.success_bonus
 
         info = self._info()
-        info.update({
-            "collided": bool(collided or floor_hit),
-            "obstacle_contacts": collided,
-            "floor_contact": floor_hit,
-            "n_contacts": n_contacts,
-            "contact_pairs": pairs,
-        })
+        info.update(
+            {
+                "collided": bool(collided or floor_hit),
+                "obstacle_contacts": collided,
+                "floor_contact": floor_hit,
+                "n_contacts": n_contacts,
+                "contact_pairs": pairs,
+            }
+        )
         if self.render_mode is not None:
             self.render()
         return self._get_obs(), float(reward), terminated, truncated, info
@@ -206,11 +211,11 @@ class PhysicsReachingEnv(gymnasium_env_base):
     def _get_obs(self) -> np.ndarray:
         qpos = self.data.qpos[:3].copy()
         qvel = self.data.qvel[:3].copy()
-        return np.concatenate(
-            [qpos, qvel, self._ee_position(), self._target_position()]
-        ).astype(np.float32)
+        return np.concatenate([qpos, qvel, self._ee_position(), self._target_position()]).astype(
+            np.float32
+        )
 
-    def _info(self) -> Dict[str, Any]:
+    def _info(self) -> dict[str, Any]:
         ee = self._ee_position()
         target = self._target_position()
         return {

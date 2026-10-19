@@ -12,7 +12,6 @@ parameter; the wrapper exists for composing with other envs uniformly.
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, SupportsFloat, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -34,7 +33,7 @@ class ActionRepeat(gym.Wrapper):
         terminated = False
         truncated = False
         obs, info = None, {}
-        for i in range(self.n):
+        for _ in range(self.n):
             obs, reward, terminated, truncated, info = self.env.step(action)
             total_reward += float(reward)
             if terminated or truncated:
@@ -56,7 +55,7 @@ class StackObservations(gym.ObservationWrapper):
             low=np.stack([low] * k), high=np.stack([high] * k), dtype=np.float32
         )
         self.k = k
-        self._history: Deque[np.ndarray] = deque(maxlen=k)
+        self._history: deque[np.ndarray] = deque(maxlen=k)
 
     def reset(self, *, seed=None, options=None):
         obs, info = self.env.reset(seed=seed, options=options)

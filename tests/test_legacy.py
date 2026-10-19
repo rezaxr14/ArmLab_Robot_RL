@@ -66,9 +66,7 @@ class TestIKDivergence:
             target = np.array(adapter.forward_kinematics(q)[3])
             sol = adapter.inverse_kinematics(target, q)
             assert sol is not None
-            residual = np.linalg.norm(
-                np.array(adapter.forward_kinematics(sol)[3]) - target
-            )
+            residual = np.linalg.norm(np.array(adapter.forward_kinematics(sol)[3]) - target)
             assert residual < 1e-6
 
 

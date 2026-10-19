@@ -13,8 +13,8 @@ obstacle list for metrics, and metadata needed for reproducible evaluation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -33,8 +33,8 @@ class ScenarioBundle:
 
     name: str
     env: KinematicReachingEnv
-    obstacles: List[Obstacle] = field(default_factory=list)
-    metadata: Dict = field(default_factory=dict)
+    obstacles: list[Obstacle] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 
 def _make_static(robot: RobotParams, seed: int, **overrides) -> ScenarioBundle:
@@ -81,16 +81,14 @@ def _make_collision(robot: RobotParams, seed: int, **overrides) -> ScenarioBundl
     env = KinematicReachingEnv(robot_params=robot, env_params=env_params, reward_params=reward)
     # Deterministic obstacle layout: two spheres between the default home
     # posture's workspace and a seeded target region in the +x half-space.
-    obstacles: List[Obstacle] = [
+    obstacles: list[Obstacle] = [
         SphereObstacle(center=np.array([9.0, 1.0, 12.0]), radius=1.5),
         SphereObstacle(center=np.array([11.0, -2.0, 10.0]), radius=2.0),
     ]
-    return ScenarioBundle(
-        "collision_avoidance", env, obstacles, {"seed": seed, "link_radius": 0.3}
-    )
+    return ScenarioBundle("collision_avoidance", env, obstacles, {"seed": seed, "link_radius": 0.3})
 
 
-SCENARIOS: Dict[str, Callable[..., ScenarioBundle]] = {
+SCENARIOS: dict[str, Callable[..., ScenarioBundle]] = {
     "static_reaching": _make_static,
     "boundary_reaching": _make_boundary,
     "moving_target": _make_moving,
@@ -98,14 +96,14 @@ SCENARIOS: Dict[str, Callable[..., ScenarioBundle]] = {
 }
 
 
-def list_scenarios() -> List[str]:
+def list_scenarios() -> list[str]:
     return sorted(SCENARIOS)
 
 
 def make_scenario(
     name: str,
     seed: int = 0,
-    robot: Optional[RobotParams] = None,
+    robot: RobotParams | None = None,
     **overrides,
 ) -> ScenarioBundle:
     """Build a scenario bundle by name.

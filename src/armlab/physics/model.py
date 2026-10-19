@@ -16,7 +16,7 @@ collision flags disabled so it never affects dynamics.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 from armlab.config import PhysicsParams, RobotParams
 
@@ -52,9 +52,9 @@ OBSTACLE_XML = _obstacle_xml  # alias for callers
 
 
 def build_arm_xml(
-    robot: Optional[RobotParams] = None,
-    physics: Optional[PhysicsParams] = None,
-    obstacles: Optional[List[Tuple[str, str, Sequence[float], Sequence[float]]]] = None,
+    robot: RobotParams | None = None,
+    physics: PhysicsParams | None = None,
+    obstacles: list[tuple[str, str, Sequence[float], Sequence[float]]] | None = None,
     include_floor: bool = True,
 ) -> str:
     """Build the arm MJCF as a string.

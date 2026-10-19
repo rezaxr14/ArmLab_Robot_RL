@@ -6,7 +6,7 @@ import pytest
 gym = pytest.importorskip("gymnasium")
 from gymnasium.utils.env_checker import check_env
 
-from armlab.config import EnvParams, RewardParams, RobotParams
+from armlab.config import EnvParams, RewardParams
 from armlab.envs import KinematicReachingEnv, MovingTargetEnv, register_envs
 from armlab.envs.wrappers import ActionRepeat, StackObservations
 

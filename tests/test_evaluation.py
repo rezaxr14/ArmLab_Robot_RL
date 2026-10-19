@@ -21,8 +21,9 @@ from armlab.planning import SphereObstacle
 class TestComputeMetrics:
     def _record(self, success=True):
         # EE travels toward target over 5 steps.
-        ee = np.array([[0, 0, 5], [2, 0, 5], [4, 0, 5], [6, 0, 5], [6.5, 0, 5], [6.8, 0, 5]],
-                      dtype=float)
+        ee = np.array(
+            [[0, 0, 5], [2, 0, 5], [4, 0, 5], [6, 0, 5], [6.5, 0, 5], [6.8, 0, 5]], dtype=float
+        )
         target_dist = np.array([10, 8, 6, 4, 2, 0.1 if success else 5.0])
         return EpisodeRecord(
             ee_positions=ee,
@@ -37,7 +38,9 @@ class TestComputeMetrics:
         m = compute_metrics(self._record(success=True))
         assert m.success
         assert m.time_to_reach == 5
-        assert m.path_length == pytest.approx(np.sum(np.linalg.norm(np.diff(self._record().ee_positions, axis=0), axis=1)))
+        assert m.path_length == pytest.approx(
+            np.sum(np.linalg.norm(np.diff(self._record().ee_positions, axis=0), axis=1))
+        )
 
     def test_failure_metrics(self):
         m = compute_metrics(self._record(success=False))
@@ -55,10 +58,18 @@ class TestComputeMetrics:
 
 class TestAggregate:
     def test_aggregate_fields(self):
-        records = [compute_metrics(EpisodeRecord(
-            ee_positions=np.zeros((3, 3)), distances=np.array([2.0, 1.0, 0.5]),
-            rewards=[-1, -1], q_positions=np.zeros((3, 3)), success_threshold=1.0,
-        )) for _ in range(4)]
+        records = [
+            compute_metrics(
+                EpisodeRecord(
+                    ee_positions=np.zeros((3, 3)),
+                    distances=np.array([2.0, 1.0, 0.5]),
+                    rewards=[-1, -1],
+                    q_positions=np.zeros((3, 3)),
+                    success_threshold=1.0,
+                )
+            )
+            for _ in range(4)
+        ]
         report = aggregate(records)
         assert report["n_episodes"] == 4
         assert report["success_rate"] == 1.0

@@ -13,7 +13,7 @@ corrected IK (see armlab.legacy module docstring).
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Union
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -33,12 +33,12 @@ class Robot:
         self.l1, self.l2, self.l3 = self._kin.l1, self._kin.l2, self._kin.l3
         self.thetas = [0.0, 0.0, 0.0]
 
-    def forward_kinematics(self, thetas) -> List[np.ndarray]:
+    def forward_kinematics(self, thetas) -> list[np.ndarray]:
         """Return [base, shoulder, elbow, ee] positions as a list."""
         self.thetas = list(thetas)
         return list(self._kin.link_positions(np.asarray(thetas, dtype=float)))
 
-    def inverse_kinematics(self, target_pos, current_thetas) -> Optional[List[float]]:
+    def inverse_kinematics(self, target_pos, current_thetas) -> list[float] | None:
         """Return closest-branch IK solution as a list, or None."""
         result = self._kin.inverse_kinematics(
             np.asarray(target_pos, dtype=float),

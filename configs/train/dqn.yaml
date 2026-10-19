@@ -1,0 +1,26 @@
+# Dueling Double DQN. Use small overrides for smoke tests:
+#   python -m armlab train dqn --config configs/train/dqn.yaml --max-steps 1000
+seed: 7
+env_id: ArmLabKinematic-v0
+n_episodes: 300
+max_steps_per_episode: 250
+eval_every: 25
+eval_episodes: 5
+output_dir: results
+
+agent:
+  gamma: 0.99
+  lr: 0.0005
+  batch_size: 128
+  buffer_size: 100000
+  hidden_sizes: [256, 256]
+  stream_hidden_size: 128
+  epsilon_start: 1.0
+  epsilon_min: 0.01
+  epsilon_decay: 0.9995
+  learn_every: 4
+  gradient_clip: 10.0
+  target_update_mode: soft
+  target_update_every: 500
+  tau: 0.001
+  min_buffer_samples: 64

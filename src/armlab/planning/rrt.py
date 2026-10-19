@@ -10,8 +10,8 @@ success/failure explicitly.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
 
 import numpy as np
 
@@ -33,7 +33,7 @@ class PlannerResult:
     """
 
     success: bool
-    path: Optional[np.ndarray]
+    path: np.ndarray | None
     iterations: int
     reason: str
 
@@ -56,14 +56,14 @@ class JointSpaceRRT:
     def __init__(
         self,
         kinematics: RobotKinematics,
-        obstacles: Optional[Sequence[Obstacle]] = None,
+        obstacles: Sequence[Obstacle] | None = None,
         link_radius: float = 0.3,
         step_size: float = 0.25,
         goal_bias: float = 0.1,
         max_iterations: int = 800,
         edge_check_steps: int = 6,
         seed: int = 0,
-        joint_limits: Optional[tuple] = None,
+        joint_limits: tuple | None = None,
     ) -> None:
         if step_size <= 0:
             raise ValueError("step_size must be positive.")
@@ -107,8 +107,8 @@ class JointSpaceRRT:
         if not self._config_free(q_goal):
             return PlannerResult(False, None, 0, "goal_in_collision")
 
-        nodes: List[np.ndarray] = [q_start.copy()]
-        parents: List[int] = [-1]
+        nodes: list[np.ndarray] = [q_start.copy()]
+        parents: list[int] = [-1]
 
         for it in range(self.max_iterations):
             if self.rng.random() < self.goal_bias:
@@ -146,7 +146,7 @@ class JointSpaceRRT:
         return PlannerResult(False, None, self.max_iterations, "max_iterations")
 
     @staticmethod
-    def _extract_path(nodes: List[np.ndarray], parents: List[int]) -> np.ndarray:
+    def _extract_path(nodes: list[np.ndarray], parents: list[int]) -> np.ndarray:
         path = []
         idx = len(nodes) - 1
         while idx != -1:
@@ -167,4 +167,3 @@ class JointSpaceRRT:
             if self._edge_free(pts[i], pts[j]):
                 pts = pts[: i + 1] + pts[j:]
         return np.stack(pts)
-

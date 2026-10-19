@@ -8,8 +8,6 @@ seeded, making the controller deterministic for a given seed and state.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from armlab.controllers.base import Controller
@@ -39,7 +37,7 @@ class ShootingMPCController(Controller):
         n_samples: int = 40,
         action_magnitude: float = 0.2,
         seed: int = 0,
-        joint_limits: Optional[tuple] = None,
+        joint_limits: tuple | None = None,
     ) -> None:
         if horizon < 1 or n_samples < 1:
             raise ValueError("horizon and n_samples must be >= 1.")
@@ -76,8 +74,9 @@ class ShootingMPCController(Controller):
         # Always include a greedy descent candidate (toward IK solution).
         result = self.kin.inverse_kinematics(target, q_current=q)
         if result.reachable:
-            greedy_dq = np.clip(wrap_angles(result.solution - q), -self.action_magnitude,
-                                self.action_magnitude)
+            greedy_dq = np.clip(
+                wrap_angles(result.solution - q), -self.action_magnitude, self.action_magnitude
+            )
             sequences[0, :, :] = greedy_dq  # repeated greedy step
 
         best_cost = np.inf

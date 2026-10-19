@@ -8,7 +8,7 @@ library code; it is only imported when human rendering is requested.
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -39,8 +39,15 @@ class RobotVisualizer:
         self.ax.grid(True, linestyle="--", alpha=0.6)
 
         (self.links_plot,) = self.ax.plot(
-            [], [], [], "o-", lw=5, markersize=10,
-            markerfacecolor="deepskyblue", markeredgecolor="navy", color="royalblue",
+            [],
+            [],
+            [],
+            "o-",
+            lw=5,
+            markersize=10,
+            markerfacecolor="deepskyblue",
+            markeredgecolor="navy",
+            color="royalblue",
         )
         (self.end_effector_plot,) = self.ax.plot(
             [], [], [], "D", markersize=12, color="gold", markeredgecolor="black"
@@ -51,7 +58,7 @@ class RobotVisualizer:
         self.fig.canvas.draw()
         plt.show(block=False)
 
-    def plot_robot(self, joint_positions, target_pos: Optional[np.ndarray] = None) -> None:
+    def plot_robot(self, joint_positions, target_pos: np.ndarray | None = None) -> None:
         xs = [p[0] for p in joint_positions]
         ys = [p[1] for p in joint_positions]
         zs = [p[2] for p in joint_positions]

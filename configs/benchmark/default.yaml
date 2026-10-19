@@ -1,0 +1,23 @@
+# Standardized benchmark suite.
+#
+# `smoke: true` marks development runs. Any run produced from a smoke suite is
+# labelled a smoke result and must not be reported as a final benchmark.
+schema_version: "1.0"
+suite: default
+output_dir: results
+scenarios:
+  - static_reaching
+  - boundary_reaching
+  - moving_target
+  - collision_avoidance
+controllers:
+  - ik
+  - jacobian
+  - pd
+  - mpc
+n_eval_episodes: 20
+base_eval_seed: 100000
+smoke: true
+render: false
+video: false
+require_physics: false

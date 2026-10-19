@@ -74,7 +74,7 @@ class TestRRT:
     def test_path_is_collision_free(self, kin):
         obstacle = SphereObstacle(center=np.array([10.0, 0.0, 12.0]), radius=1.5)
         planner = JointSpaceRRT(kin, obstacles=[obstacle], seed=2, max_iterations=1500)
-        q_start = np.array([0.0, 0.6, -0.4])   # EE around (0, 0, 17)
+        q_start = np.array([0.0, 0.6, -0.4])  # EE around (0, 0, 17)
         q_goal = np.array([np.pi, 0.6, -0.4])  # EE mirrored across z-axis
         result = planner.plan(q_start, q_goal)
         assert result.success, result.reason

@@ -1,9 +1,8 @@
 """Tests for armlab.config validation and serialization."""
 
-import numpy as np
 import pytest
 
-from armlab.config import EnvParams, PhysicsParams, RLConfig, RewardParams, RobotParams
+from armlab.config import EnvParams, PhysicsParams, RewardParams, RLConfig, RobotParams
 
 
 class TestRobotParams:
@@ -31,8 +30,9 @@ class TestRobotParams:
 
     def test_as_dict_round_trip(self):
         p = RobotParams(link_lengths=(1.0, 2.0, 3.0))
-        p2 = RobotParams(**{k: tuple(v) if isinstance(v, list) else v
-                            for k, v in p.as_dict().items()})
+        p2 = RobotParams(
+            **{k: tuple(v) if isinstance(v, list) else v for k, v in p.as_dict().items()}
+        )
         assert p2.link_lengths == (1.0, 2.0, 3.0)
 
 

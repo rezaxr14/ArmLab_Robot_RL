@@ -17,9 +17,9 @@ Conventions (see docs/conventions.md):
   from the vertical (+z) axis and the elbow angle relative to the second link.
 """
 
-from armlab.config import EnvParams, PhysicsParams, RLConfig, RewardParams, RobotParams
+from armlab.config import EnvParams, PhysicsParams, RewardParams, RLConfig, RobotParams
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "EnvParams",
