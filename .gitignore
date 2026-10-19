@@ -27,6 +27,7 @@ results/
 !RL_Double_Dueling_DQN/qnetwork.pth
 *.mp4
 *.gif
+!docs/assets/*.gif
 
 # --- OS / editor ---
 .DS_Store
