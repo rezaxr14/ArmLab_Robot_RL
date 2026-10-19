@@ -63,6 +63,18 @@ def _print(message: str = "") -> None:
     print(message)
 
 
+def _resolve_device(name: str | None) -> str:
+    """Resolve ``auto`` to CUDA when available, otherwise CPU."""
+    if name and name != "auto":
+        return name
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
+
+
 # ---------------------------------------------------------------- doctor
 def cmd_doctor(args: argparse.Namespace) -> int:
     import armlab
@@ -201,11 +213,12 @@ def cmd_train_dqn(args: argparse.Namespace) -> int:
     eval_env = gym.make(env_id)
     state_dim = int(env.observation_space.shape[0])
     action_dim = int(env.action_space.n)
-    agent = DQNAgent(state_dim, action_dim, config=agent_cfg, seed=seed)
+    device = _resolve_device(args.device)
+    agent = DQNAgent(state_dim, action_dim, config=agent_cfg, device=device, seed=seed)
 
     _print(
         f"Training DQN: env={env_id} seed={seed} episodes={n_episodes} "
-        f"max_steps={max_steps} out={run_dir}"
+        f"max_steps={max_steps} device={device} out={run_dir}"
     )
     try:
         result = train_dqn(
@@ -268,6 +281,7 @@ def cmd_train_sac(args: argparse.Namespace) -> int:
         eval_episodes=int(data.get("eval_episodes", 5)),
         eval_seed=args.eval_seed,
         deterministic_eval=bool(data.get("deterministic_eval", True)),
+        device=_resolve_device(args.device),
         log_fn=_print,
     )
     _print(f"model saved: {payload['model_path']}")
@@ -441,6 +455,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dqn.add_argument("--max-steps", type=int, default=None)
     p_dqn.add_argument("--eval-every", type=int, default=None)
     p_dqn.add_argument("--eval-seed", type=int, default=10_000)
+    p_dqn.add_argument("--device", default="auto", help="'auto', 'cpu' or 'cuda'")
     p_dqn.add_argument("--output-dir", default=None)
     p_dqn.set_defaults(func=cmd_train_dqn)
     p_sac = train_sub.add_parser("sac", help="train SAC (requires rl extra)")
@@ -449,6 +464,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sac.add_argument("--seed", type=int, default=None)
     p_sac.add_argument("--total-timesteps", type=int, default=None)
     p_sac.add_argument("--eval-seed", type=int, default=100_000)
+    p_sac.add_argument("--device", default="auto", help="'auto', 'cpu' or 'cuda'")
     p_sac.add_argument("--output-dir", default=None)
     p_sac.set_defaults(func=cmd_train_sac)
 

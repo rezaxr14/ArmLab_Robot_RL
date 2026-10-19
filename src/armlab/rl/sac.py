@@ -80,6 +80,7 @@ def train_sac(
     eval_episodes: int = 5,
     eval_seed: int = 100_000,
     deterministic_eval: bool = True,
+    device: str = "auto",
     log_every: int = 1000,
     log_fn=print,
 ) -> dict[str, Any]:
@@ -102,6 +103,7 @@ def train_sac(
         env,
         seed=seed,
         verbose=0,
+        device=device,
         policy_kwargs={"net_arch": params.pop("net_arch", [256, 256])},
         **params,
     )
