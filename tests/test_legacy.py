@@ -1,8 +1,8 @@
 """Tests for the legacy compatibility layer.
 
-These tests load the original legacy modules directly from their folders via
-importlib and compare behavior with the armlab.legacy adapters. One test
-documents the legacy IK bug that the corrected implementation fixes.
+These tests load the original demo modules directly from their folders via
+importlib and compare behavior with the armlab.legacy adapters. Both the
+original and corrected IK implementations must round-trip through their own FK.
 """
 
 import importlib.util
@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_legacy_robot():
-    path = REPO_ROOT / "Analytical_Inverse_Kinematics" / "robot.py"
+    path = REPO_ROOT / "projects" / "analytical_inverse_kinematics" / "robot.py"
     spec = importlib.util.spec_from_file_location("legacy_robot_module", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["legacy_robot_module"] = module
@@ -44,19 +44,18 @@ class TestFKEquivalence:
                 np.testing.assert_allclose(pl, pa, atol=1e-12)
 
 
-class TestIKDivergence:
-    def test_legacy_ik_round_trip_is_broken(self):
-        """Documents the legacy IK bug: FK measures theta2 from vertical,
-        but the legacy IK computes the plane angle from horizontal, so the
-        round trip FK(IK(FK(q))) does not return to the target."""
+class TestIKRoundTrip:
+    def test_legacy_ik_round_trips(self):
+        """The original demo's FK/IK pair must recover a reachable target."""
         legacy = LegacyRobot([5, 10, 8])
-        q = np.array([0.3, 0.5, -0.4])
-        target = legacy.forward_kinematics(q)[3]
-        sol = legacy.inverse_kinematics(target, q)
-        assert sol is not None
-        residual = np.linalg.norm(np.array(legacy.forward_kinematics(sol)[3]) - target)
-        # Residual is O(arm size) - far beyond any acceptable tolerance.
-        assert residual > 1.0
+        rng = np.random.default_rng(3)
+        for _ in range(100):
+            q = rng.uniform(-np.pi, np.pi, size=3)
+            target = np.array(legacy.forward_kinematics(q)[3])
+            sol = legacy.inverse_kinematics(target, q)
+            assert sol is not None
+            residual = np.linalg.norm(np.array(legacy.forward_kinematics(sol)[3]) - target)
+            assert residual < 1e-6
 
     def test_corrected_ik_round_trips(self):
         adapter = LegacyRobotAdapter([5, 10, 8])

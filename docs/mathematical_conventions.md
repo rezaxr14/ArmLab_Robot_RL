@@ -106,12 +106,10 @@ The result is an `IKResult(solution, reachable, branch, residual)`. `residual`
 is the FK reconstruction error and is `0` for exact solutions. No code path
 returns `NaN`/`Inf` angles.
 
-> Regression note. The legacy `Analytical_Inverse_Kinematics/robot.py` computed
-> the plane angle as `atan2(z', r_xy)` — the complement of `gamma` — which
-> breaks the FK/IK round trip. That file is kept as the historical buggy
-> reference; `tests/test_legacy.py::test_legacy_ik_round_trip_is_broken`
-> documents the residual (> 1.0) and `armlab.legacy.Robot` provides the
-> corrected behavior behind the same API.
+> The original demo in `projects/analytical_inverse_kinematics/robot.py` uses
+> this same vertical-plane convention. Its FK/IK round trip and the
+> `armlab.legacy.Robot` adapter are both covered by
+> `tests/test_legacy.py::TestIKRoundTrip`.
 
 ## Geometric Jacobian
 

@@ -85,8 +85,14 @@ def make_policy(
         inner = JointPDController(kinematics, kp=0.6, kd=0.1, dt=0.05, max_dq=0.3)
         return controller_policy_continuous(inner, action_scale)
     if controller == "jacobian":
+        sphere_obstacles = [o for o in obstacles if hasattr(o, "center") and hasattr(o, "radius")]
         inner = CartesianDLSController(
-            kinematics, kp=0.8, damping=0.1, max_dq=0.3, joint_limits=joint_limits
+            kinematics,
+            kp=0.8,
+            damping=0.1,
+            max_dq=0.3,
+            joint_limits=joint_limits,
+            obstacles=sphere_obstacles,
         )
         return controller_policy_continuous(inner, action_scale)
     if controller == "mpc":

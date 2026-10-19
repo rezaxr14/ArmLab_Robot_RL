@@ -1,4 +1,4 @@
-"""Compatibility wrapper for the legacy ``Analytical_Inverse_Kinematics.robot``.
+"""Compatibility wrapper for ``projects/analytical_inverse_kinematics/robot.py``.
 
 Preserves the legacy class/method names and calling conventions:
 
@@ -7,8 +7,8 @@ Preserves the legacy class/method names and calling conventions:
   returning a list of 3 angles or None.
 - ``total_reach`` property.
 
-Internally delegates to ``armlab.kinematics.RobotKinematics`` with the
-corrected IK (see armlab.legacy module docstring).
+Internally delegates to ``armlab.kinematics.RobotKinematics`` and preserves
+the original demo's vertical-plane IK convention.
 """
 
 from __future__ import annotations
