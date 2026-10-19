@@ -7,8 +7,6 @@ moving target at any point during the episode.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from armlab.config import EnvParams, RewardParams, RobotParams
@@ -27,11 +25,11 @@ class MovingTargetEnv(KinematicReachingEnv):
 
     def __init__(
         self,
-        robot_params: Optional[RobotParams] = None,
-        env_params: Optional[EnvParams] = None,
-        reward_params: Optional[RewardParams] = None,
-        render_mode: Optional[str] = None,
-        trajectory_center: Optional[np.ndarray] = None,
+        robot_params: RobotParams | None = None,
+        env_params: EnvParams | None = None,
+        reward_params: RewardParams | None = None,
+        render_mode: str | None = None,
+        trajectory_center: np.ndarray | None = None,
         amp_range: float = 2.0,
         freq_range: float = 0.4,
         dt: float = 0.05,
@@ -43,9 +41,9 @@ class MovingTargetEnv(KinematicReachingEnv):
         self.dt = float(dt)
         if self.dt <= 0:
             raise ValueError("dt must be positive.")
-        self._traj: Optional[MovingTargetTrajectory] = None
+        self._traj: MovingTargetTrajectory | None = None
 
-    def reset(self, *, seed: Optional[int] = None, options=None):
+    def reset(self, *, seed: int | None = None, options=None):
         obs, info = super().reset(seed=seed, options={"target": np.zeros(3)})
         self._traj = MovingTargetTrajectory(
             self.robot_params,

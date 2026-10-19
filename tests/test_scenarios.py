@@ -9,8 +9,12 @@ from armlab.scenarios import list_scenarios, make_scenario
 class TestScenarioRegistry:
     def test_all_scenarios_registered(self):
         names = list_scenarios()
-        assert names == ["boundary_reaching", "collision_avoidance",
-                         "moving_target", "static_reaching"]
+        assert names == [
+            "boundary_reaching",
+            "collision_avoidance",
+            "moving_target",
+            "static_reaching",
+        ]
 
     def test_unknown_scenario(self):
         with pytest.raises(KeyError):

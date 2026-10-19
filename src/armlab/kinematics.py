@@ -12,7 +12,6 @@ The shoulder joint sits at [0, 0, l1]; links 2 and 3 have lengths l2, l3.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -50,9 +49,9 @@ class IKResult:
             (0.0 for exact solutions, NaN when unreachable).
     """
 
-    solution: Optional[np.ndarray]
+    solution: np.ndarray | None
     reachable: bool
-    branch: Optional[str]
+    branch: str | None
     residual: float
 
 
@@ -98,8 +97,8 @@ class RobotKinematics:
     def inverse_kinematics(
         self,
         target: np.ndarray,
-        q_current: Optional[np.ndarray] = None,
-        elbow: Optional[str] = None,
+        q_current: np.ndarray | None = None,
+        elbow: str | None = None,
     ) -> IKResult:
         """Analytical IK with solution selection.
 
@@ -113,7 +112,7 @@ class RobotKinematics:
             IKResult; ``reachable`` False when the target lies outside the
             reachable annulus of the shoulder joint.
         """
-        target = np.asarray(target, dtype=float).reshape(3)
+        target = self._as_triple(target, "target")
         if q_current is None:
             q_current = np.zeros(3)
         q_current = self._validate_q(q_current)
@@ -136,6 +135,20 @@ class RobotKinematics:
         l2, l3 = self.l2, self.l3
         if D > l2 + l3 or D < abs(l2 - l3):
             return IKResult(solution=None, reachable=False, branch=None, residual=np.nan)
+
+        # Deliberate singular case: the target coincides with the shoulder.
+        # This is only reachable when l2 == l3; the arm folds back on itself,
+        # so theta2 is free and the elbow is fully bent. Preserve the current
+        # shoulder angle instead of dividing by D = 0.
+        if D < 1e-12:
+            chosen = wrap_angles(np.array([theta1, float(q_current[1]), np.pi]))
+            residual = float(np.linalg.norm(self.end_effector(chosen) - target))
+            return IKResult(
+                solution=chosen,
+                reachable=True,
+                branch="elbow_up" if elbow != "elbow_down" else "elbow_down",
+                residual=residual,
+            )
 
         # Guard tiny negative values from floating point before arccos.
         cos_t3 = np.clip((D**2 - l2**2 - l3**2) / (2.0 * l2 * l3), -1.0, 1.0)
@@ -177,7 +190,7 @@ class RobotKinematics:
         s2, c2 = np.sin(t2), np.cos(t2)
         s23, c23 = np.sin(t2 + t3), np.cos(t2 + t3)
 
-        r = self.l2 * s2 + self.l3 * s23           # horizontal reach
+        r = self.l2 * s2 + self.l3 * s23  # horizontal reach
         dr_dtheta2 = self.l2 * c2 + self.l3 * c23
         dr_dtheta3 = self.l3 * c23
         dz_dtheta2 = -(self.l2 * s2 + self.l3 * s23)
@@ -212,7 +225,7 @@ class RobotKinematics:
         if damping < 0:
             raise ValueError(f"damping must be >= 0, got {damping}.")
         q = self._validate_q(q)
-        dx = np.asarray(dx, dtype=float).reshape(3)
+        dx = self._as_triple(dx, "dx")
         J = self.jacobian(q)
         A = J @ J.T + (damping**2) * np.eye(3)
         return J.T @ np.linalg.solve(A, dx)
@@ -224,8 +237,15 @@ class RobotKinematics:
         diff = wrap_angles(np.asarray(a) - np.asarray(b))
         return float(np.sum(diff**2))
 
-    def _validate_q(self, q: np.ndarray) -> np.ndarray:
-        arr = np.asarray(q, dtype=float).reshape(3)
+    @staticmethod
+    def _as_triple(value: np.ndarray, name: str) -> np.ndarray:
+        """Validate that ``value`` is a finite vector with exact shape ``(3,)``."""
+        arr = np.asarray(value, dtype=float)
+        if arr.shape != (3,):
+            raise ValueError(f"{name} must have shape (3,), got {arr.shape}.")
         if not np.all(np.isfinite(arr)):
-            raise ValueError(f"Joint angles must be finite, got {q!r}.")
+            raise ValueError(f"{name} must be finite, got {value!r}.")
         return arr
+
+    def _validate_q(self, q: np.ndarray) -> np.ndarray:
+        return self._as_triple(q, "Joint angles")

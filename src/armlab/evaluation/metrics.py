@@ -17,8 +17,7 @@ No metric is fabricated: every number derives from the recorded rollout.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -31,12 +30,12 @@ __all__ = ["EpisodeRecord", "EpisodeMetrics", "aggregate", "compute_metrics"]
 class EpisodeRecord:
     """Raw data recorded during one episode rollout."""
 
-    ee_positions: np.ndarray        # (T+1, 3)
-    distances: np.ndarray           # (T+1,)
-    rewards: List[float]
-    q_positions: np.ndarray         # (T+1, 3)
+    ee_positions: np.ndarray  # (T+1, 3)
+    distances: np.ndarray  # (T+1,)
+    rewards: list[float]
+    q_positions: np.ndarray  # (T+1, 3)
     success_threshold: float
-    link_positions: Optional[np.ndarray] = None  # (T+1, 4, 3) if available
+    link_positions: np.ndarray | None = None  # (T+1, 4, 3) if available
     steps: int = 0
     terminated: bool = False
     truncated: bool = False
@@ -47,11 +46,11 @@ class EpisodeMetrics:
     """Metrics derived from one EpisodeRecord."""
 
     success: bool
-    time_to_reach: float            # steps; np.inf when never successful
+    time_to_reach: float  # steps; np.inf when never successful
     path_length: float
     smoothness: float
     total_reward: float
-    min_clearance: Optional[float] = None
+    min_clearance: float | None = None
     collisions: int = 0
 
     def as_dict(self) -> dict:
@@ -70,7 +69,7 @@ class EpisodeMetrics:
 
 def compute_metrics(
     record: EpisodeRecord,
-    obstacles: Optional[List[Obstacle]] = None,
+    obstacles: list[Obstacle] | None = None,
     link_radius: float = 0.3,
 ) -> EpisodeMetrics:
     """Compute metrics from a recorded episode.
@@ -103,9 +102,7 @@ def compute_metrics(
     if obstacles and record.link_positions is not None:
         clears = []
         for links in record.link_positions:  # (4, 3) base->shoulder->elbow->ee
-            clears.append(
-                min(min_clearance(list(links), obs) for obs in obstacles)
-            )
+            clears.append(min(min_clearance(list(links), obs) for obs in obstacles))
         min_clear = float(np.min(clears))
         collisions = int(np.sum(np.array(clears) < link_radius))
 
@@ -120,7 +117,7 @@ def compute_metrics(
     )
 
 
-def aggregate(metrics: List[EpisodeMetrics]) -> dict:
+def aggregate(metrics: list[EpisodeMetrics]) -> dict:
     """Aggregate episode metrics into a report with mean/std/median."""
     if not metrics:
         raise ValueError("aggregate() requires at least one EpisodeMetrics.")

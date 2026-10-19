@@ -5,19 +5,24 @@ contacts): actions change joint angles directly, and the end effector moves
 according to analytical forward kinematics. This is the benchmark's
 lowest-dependency task environment and the base for the RL experiments.
 
-Observations (``observation_kind="joint_ee_target"``):
+Observation contract (version ``1.0``, ``observation_kind="joint_ee_target"``):
     [q(3), ee(3), target(3)] -> shape (9,)
-Observations (``observation_kind="relative"``):
+``observation_kind="relative"``:
     [q(3), target - ee(3)] -> shape (6,)
 
 Actions:
-    Discrete(6): joint a//2 by +/- action_step_size (default 5 deg).
-    Continuous: Box(-1, 1, (3,)) scaled by continuous_action_scale.
+    Discrete(6): joint ``a // 2`` moves by ``+/- action_step_size``.
+    Continuous: ``Box(-1, 1, (3,))`` scaled by ``continuous_action_scale``.
+
+Termination semantics (implementation plan C5):
+    ``terminated`` is True only for task success (when ``success_terminates``);
+    ``truncated`` is True when the episode hit ``max_episode_steps``. Reward
+    components are returned in ``info["reward_components"]``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -29,6 +34,8 @@ from armlab.targets import sample_uniform_reachable
 
 __all__ = ["KinematicReachingEnv"]
 
+OBSERVATION_VERSION = "1.0"
+
 
 class KinematicReachingEnv(gym.Env):
     """3-link arm reaching task on the kinematic model.
@@ -39,13 +46,14 @@ class KinematicReachingEnv(gym.Env):
     """
 
     metadata = {"render_modes": ["human"], "render_fps": 30}
+    observation_version = OBSERVATION_VERSION
 
     def __init__(
         self,
-        robot_params: Optional[RobotParams] = None,
-        env_params: Optional[EnvParams] = None,
-        reward_params: Optional[RewardParams] = None,
-        render_mode: Optional[str] = None,
+        robot_params: RobotParams | None = None,
+        env_params: EnvParams | None = None,
+        reward_params: RewardParams | None = None,
+        render_mode: str | None = None,
     ) -> None:
         super().__init__()
         self.robot_params = robot_params or RobotParams()
@@ -57,9 +65,7 @@ class KinematicReachingEnv(gym.Env):
         if self.env_params.control_mode == "discrete":
             self.action_space = spaces.Discrete(6)
         else:
-            self.action_space = spaces.Box(
-                low=-1.0, high=1.0, shape=(3,), dtype=np.float32
-            )
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
 
         low_lim = np.asarray(self.robot_params.joint_limits_low, dtype=np.float32)
         high_lim = np.asarray(self.robot_params.joint_limits_high, dtype=np.float32)
@@ -86,38 +92,52 @@ class KinematicReachingEnv(gym.Env):
             obs = np.concatenate([self.q, self.target - ee])
         return obs.astype(np.float32)
 
-    def _apply_action(self, action: np.ndarray | int) -> None:
-        """Apply one action to the joint angles (with limits enforced)."""
-        low = np.asarray(self.robot_params.joint_limits_low)
-        high = np.asarray(self.robot_params.joint_limits_high)
+    def _joint_limits(self) -> tuple[np.ndarray, np.ndarray]:
+        return (
+            np.asarray(self.robot_params.joint_limits_low, dtype=float),
+            np.asarray(self.robot_params.joint_limits_high, dtype=float),
+        )
+
+    def _action_delta(self, action: np.ndarray | int) -> np.ndarray:
         if isinstance(action, (int, np.integer)):
             joint = int(action) // 2
+            if not 0 <= joint < 3:
+                raise ValueError(f"Discrete action must be in [0, 5], got {action}.")
             sign = 1.0 if int(action) % 2 == 0 else -1.0
             dq = np.zeros(3)
             dq[joint] = sign * self.env_params.action_step_size
-        else:
-            a = np.clip(np.asarray(action, dtype=float).reshape(3), -1.0, 1.0)
-            dq = a * self.env_params.continuous_action_scale
-        self.q = np.clip(self.q + dq, low, high)
+            return dq
+        a = np.clip(np.asarray(action, dtype=float).reshape(3), -1.0, 1.0)
+        return a * self.env_params.continuous_action_scale
 
-    def _reward(self, action: np.ndarray | int, dist: float) -> Tuple[float, bool, bool]:
+    def _apply_action(self, action: np.ndarray | int) -> bool:
+        """Apply one action; return True if a joint limit clipped the motion."""
+        low, high = self._joint_limits()
+        dq = self._action_delta(action)
+        raw = self.q + dq
+        self.q = np.clip(raw, low, high)
+        return bool(np.any(raw > high + 1e-12) or np.any(raw < low - 1e-12))
+
+    def _reward_components(
+        self, action: np.ndarray | int, prev_dist: float, dist: float, limit_hit: bool
+    ) -> dict[str, float]:
         rp = self.reward_params
-        reward = -rp.distance_penalty_scale * dist
-        if rp.action_penalty:
-            magnitude = 1.0 if isinstance(action, (int, np.integer)) else float(
-                np.linalg.norm(np.asarray(action, dtype=float))
-            )
-            reward -= rp.action_penalty * magnitude
-        reward -= rp.time_penalty
-
-        terminated = bool(dist < rp.success_threshold and rp.success_terminates)
-        if terminated:
-            reward += rp.success_bonus
-        truncated = bool(self.elapsed_steps >= self.env_params.max_episode_steps)
-        return float(reward), terminated, truncated
+        if isinstance(action, (int, np.integer)):
+            magnitude = 1.0
+        else:
+            magnitude = float(np.linalg.norm(np.asarray(action, dtype=float)))
+        success = dist < rp.success_threshold
+        return {
+            "progress": float(rp.progress_scale * (prev_dist - dist)),
+            "distance": float(-rp.distance_penalty_scale * dist),
+            "action_cost": float(-rp.action_penalty * magnitude),
+            "time_cost": float(-rp.time_penalty),
+            "limit_penalty": float(-rp.limit_penalty) if limit_hit else 0.0,
+            "success": float(rp.success_bonus) if success else 0.0,
+        }
 
     # ------------------------------------------------------------------
-    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
         self.q = np.zeros(3, dtype=np.float64)
         if options and "target" in options:
@@ -127,27 +147,54 @@ class KinematicReachingEnv(gym.Env):
                 self.robot_params, self.env_params, self.np_random, kinematics=self.kin
             )
         self.elapsed_steps = 0
-        return self._get_obs(), self._info(0.0)
+        return self._get_obs(), self._info(dist=self._distance(), termination_reason="reset")
 
     def step(self, action):
+        prev_dist = self._distance()
+        limit_hit = False
         for _ in range(self.env_params.action_repeat):
-            self._apply_action(action)
+            limit_hit = self._apply_action(action) or limit_hit
             self.elapsed_steps += 1
-        ee = self.kin.end_effector(self.q)
-        dist = float(np.linalg.norm(ee - self.target))
-        reward, terminated, truncated = self._reward(action, dist)
-        obs = self._get_obs()
-        info = self._info(dist)
+        dist = self._distance()
+
+        components = self._reward_components(action, prev_dist, dist, limit_hit)
+        reward = float(sum(components.values()))
+        success = dist < self.reward_params.success_threshold
+        terminated = bool(success and self.reward_params.success_terminates)
+        truncated = bool(self.elapsed_steps >= self.env_params.max_episode_steps)
+
+        if terminated:
+            reason = "success"
+        elif truncated:
+            reason = "time_limit"
+        else:
+            reason = "running"
+
+        info = self._info(dist=dist, termination_reason=reason)
+        info.update(
+            {
+                "success": bool(success),
+                "joint_limit_hit": bool(limit_hit),
+                "collision": False,
+                "reward_components": components,
+            }
+        )
         if self.render_mode == "human":
             self.render()
-        return obs, reward, terminated, truncated, info
+        return self._get_obs(), reward, terminated, truncated, info
 
-    def _info(self, dist: float) -> Dict[str, Any]:
+    def _distance(self) -> float:
+        return float(np.linalg.norm(self.kin.end_effector(self.q) - self.target))
+
+    def _info(self, dist: float, termination_reason: str = "running") -> dict[str, Any]:
         return {
             "distance": dist,
+            "distance_to_target": dist,
             "ee_position": self.kin.end_effector(self.q).copy(),
             "target_position": self.target.copy(),
             "q": self.q.copy(),
+            "episode_steps": int(self.elapsed_steps),
+            "termination_reason": termination_reason,
         }
 
     # ------------------------------------------------------------------

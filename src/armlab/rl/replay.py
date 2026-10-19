@@ -11,8 +11,6 @@ Design (implementation plan Phase D2 fixes):
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 
 __all__ = ["ReplayBuffer"]
@@ -33,7 +31,7 @@ class ReplayBuffer:
         capacity: int,
         batch_size: int,
         seed: int = 0,
-        device: "torch.device | str" = "cpu",
+        device: torch.device | str = "cpu",
     ) -> None:
         if capacity < 1 or batch_size < 1:
             raise ValueError("capacity and batch_size must be >= 1.")
@@ -87,13 +85,11 @@ class ReplayBuffer:
         self._idx = (i + 1) % self.capacity
         self._size = min(self._size + 1, self.capacity)
 
-    def sample(self) -> Tuple["torch.Tensor", ...]:
+    def sample(self) -> tuple[torch.Tensor, ...]:
         """Sample a batch; returns (states, actions, rewards, next_states,
         terminated, truncated) as tensors on ``self.device``."""
         if self._size < self.batch_size:
-            raise ValueError(
-                f"Not enough samples: {self._size} < batch_size {self.batch_size}."
-            )
+            raise ValueError(f"Not enough samples: {self._size} < batch_size {self.batch_size}.")
         idx = self.rng.integers(0, self._size, size=self.batch_size)
         to = lambda arr: torch.as_tensor(arr[idx], device=self.device)  # noqa: E731
         return (

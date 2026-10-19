@@ -8,7 +8,7 @@ semantics: same success definition, same episode limits, same metrics.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
 
 import numpy as np
 
@@ -32,22 +32,21 @@ def rollout_controller(
     env,
     policy: PolicyFn,
     seed: int,
-    obstacles: Optional[List[Obstacle]] = None,
+    obstacles: list[Obstacle] | None = None,
     link_radius: float = 0.3,
-) -> Tuple[EpisodeRecord, EpisodeMetrics]:
+) -> tuple[EpisodeRecord, EpisodeMetrics]:
     """Run one episode and record everything metrics need.
 
     ``policy`` receives the observation and returns an action compatible with
     the env's action space. For classical controllers, wrap them with
     ``controller_policy`` below.
     """
-    env_params = env.unwrapped.env_params
     obs, info = env.reset(seed=seed)
 
     ee_list = [info["ee_position"]]
     q_list = [info["q"]]
     dist_list = [info["distance"]]
-    rewards: List[float] = []
+    rewards: list[float] = []
     links_list = [env.unwrapped.kin.link_positions(info["q"])]
 
     terminated = truncated = False
@@ -76,16 +75,52 @@ def rollout_controller(
 
 
 def controller_policy(controller, step_size: float) -> PolicyFn:
-    """Adapt a Controller (act(q, target) -> dq) to a policy(obs) -> action."""
+    """Adapt a Controller (act(q, target) -> dq) to a discrete policy.
+
+    The returned callable exposes the wrapped controller as ``.controller`` so
+    callers can reset stateful controllers between episodes.
+    """
 
     def policy(obs: np.ndarray) -> int:
         obs = np.asarray(obs, dtype=np.float32)
-        # joint_ee_target observation: [q(3), ee(3), target(3)]
+        # joint_ee_target observation: [q(3), ee(3), target(3)].
+        if obs.shape[0] < 9:
+            raise ValueError(
+                "controller_policy expects the 'joint_ee_target' observation "
+                f"(shape (>=9,)), got shape {obs.shape}."
+            )
         q = obs[:3]
         target = obs[6:9]
         dq = controller.act(q, target)
         return discrete_argmax(np.asarray(dq, dtype=float), step_size)
 
+    policy.controller = controller  # type: ignore[attr-defined]
+    return policy
+
+
+def controller_policy_continuous(controller, action_scale: float) -> PolicyFn:
+    """Adapt a Controller to the continuous env action space.
+
+    The environment maps a normalized action ``a in [-1, 1]`` to a joint
+    displacement ``a * action_scale`` radians, so the controller's ``dq`` is
+    divided by the scale and clipped.
+    """
+    if action_scale <= 0:
+        raise ValueError("action_scale must be positive.")
+
+    def policy(obs: np.ndarray) -> np.ndarray:
+        obs = np.asarray(obs, dtype=np.float32)
+        if obs.shape[0] < 9:
+            raise ValueError(
+                "controller_policy_continuous expects the 'joint_ee_target' "
+                f"observation (shape (>=9,)), got shape {obs.shape}."
+            )
+        q = obs[:3]
+        target = obs[6:9]
+        dq = np.asarray(controller.act(q, target), dtype=float)
+        return np.clip(dq / action_scale, -1.0, 1.0).astype(np.float32)
+
+    policy.controller = controller  # type: ignore[attr-defined]
     return policy
 
 
@@ -94,7 +129,7 @@ def evaluate_controller(
     policy: PolicyFn,
     n_episodes: int,
     base_seed: int = 0,
-    obstacles: Optional[List[Obstacle]] = None,
+    obstacles: list[Obstacle] | None = None,
     link_radius: float = 0.3,
 ) -> dict:
     """Evaluate a policy over ``n_episodes`` with distinct seeds.
@@ -102,7 +137,7 @@ def evaluate_controller(
     Seeds are ``base_seed + i`` so runs are exactly reproducible.
     Returns the aggregate report from armlab.evaluation.metrics.aggregate.
     """
-    all_metrics: List[EpisodeMetrics] = []
+    all_metrics: list[EpisodeMetrics] = []
     for i in range(n_episodes):
         _, metrics = rollout_controller(
             env, policy, seed=base_seed + i, obstacles=obstacles, link_radius=link_radius

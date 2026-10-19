@@ -7,8 +7,6 @@ Uniform reachable target generation must not depend on any visualizer
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from armlab.config import EnvParams, RobotParams
@@ -25,7 +23,7 @@ def sample_uniform_reachable(
     robot: RobotParams,
     env: EnvParams,
     rng: np.random.Generator,
-    kinematics: Optional[RobotKinematics] = None,
+    kinematics: RobotKinematics | None = None,
     max_attempts: int = 100,
 ) -> np.ndarray:
     """Sample a target inside the reachable workspace by rejection sampling.
@@ -43,7 +41,10 @@ def sample_uniform_reachable(
             (indicates contradictory configuration ranges).
     """
     l2, l3 = robot.link_lengths[1], robot.link_lengths[2]
-    d_min, d_max = abs(l2 - l3), l2 + l3
+    margin = float(getattr(env, "target_annulus_margin", 0.0))
+    span = (l2 + l3) - abs(l2 - l3)
+    d_min = abs(l2 - l3) + margin * span
+    d_max = (l2 + l3) - margin * span
     shoulder = np.array([0.0, 0.0, robot.base_height])
 
     for _ in range(max_attempts):
@@ -65,7 +66,7 @@ def sample_boundary_reachable(
     robot: RobotParams,
     env: EnvParams,
     rng: np.random.Generator,
-    kinematics: Optional[RobotKinematics] = None,
+    kinematics: RobotKinematics | None = None,
     margin: float = 0.1,
     max_attempts: int = 200,
 ) -> np.ndarray:
@@ -113,7 +114,7 @@ class MovingTargetTrajectory:
         self,
         robot: RobotParams,
         rng: np.random.Generator,
-        center: Optional[np.ndarray] = None,
+        center: np.ndarray | None = None,
         freq_range: float = 0.4,
         amp_range: float = 2.0,
     ) -> None:
@@ -147,4 +148,3 @@ class MovingTargetTrajectory:
         """Target position at time ``t`` seconds."""
         phase = self.freqs * t + self.phases
         return self.center + self.amps * np.sin(phase)
-

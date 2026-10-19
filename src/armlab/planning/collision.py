@@ -11,13 +11,19 @@ is the authority for real collisions (see armlab.physics).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["SphereObstacle", "BoxObstacle", "Obstacle", "segment_point_distance",
-           "min_clearance", "collides"]
+__all__ = [
+    "SphereObstacle",
+    "BoxObstacle",
+    "Obstacle",
+    "segment_point_distance",
+    "min_clearance",
+    "collides",
+]
 
 
 @dataclass(frozen=True)
@@ -64,8 +70,9 @@ def segment_point_distance(a: np.ndarray, b: np.ndarray, p: np.ndarray) -> float
     return float(np.linalg.norm(p - closest))
 
 
-def _segment_box_distance(a: np.ndarray, b: np.ndarray, box: BoxObstacle,
-                          samples: int = 12) -> float:
+def _segment_box_distance(
+    a: np.ndarray, b: np.ndarray, box: BoxObstacle, samples: int = 12
+) -> float:
     """Approximate segment-to-AABB distance by sampling interior points.
 
     Sampled points along the segment are clipped to the box and the minimum
@@ -89,15 +96,11 @@ def min_clearance(points: Sequence[np.ndarray], obstacle: Obstacle) -> float:
     pts = [np.asarray(p, float) for p in points]
     if isinstance(obstacle, SphereObstacle):
         d = min(
-            segment_point_distance(pts[i], pts[i + 1], obstacle.center)
-            for i in range(len(pts) - 1)
+            segment_point_distance(pts[i], pts[i + 1], obstacle.center) for i in range(len(pts) - 1)
         )
         return d - obstacle.radius
     if isinstance(obstacle, BoxObstacle):
-        return min(
-            _segment_box_distance(pts[i], pts[i + 1], obstacle)
-            for i in range(len(pts) - 1)
-        )
+        return min(_segment_box_distance(pts[i], pts[i + 1], obstacle) for i in range(len(pts) - 1))
     raise TypeError(f"Unsupported obstacle type: {type(obstacle)!r}")
 
 

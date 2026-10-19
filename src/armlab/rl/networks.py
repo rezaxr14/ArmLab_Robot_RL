@@ -8,7 +8,7 @@ ImportError with installation guidance when torch is unavailable.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 __all__ = ["DuelingQNetwork"]
 
@@ -51,15 +51,17 @@ class DuelingQNetwork(nn.Module):
             prev = int(h)
         self.feature = nn.Sequential(*layers)
         self.value_stream = nn.Sequential(
-            nn.Linear(prev, stream_hidden_size), nn.ReLU(),
+            nn.Linear(prev, stream_hidden_size),
+            nn.ReLU(),
             nn.Linear(stream_hidden_size, 1),
         )
         self.advantage_stream = nn.Sequential(
-            nn.Linear(prev, stream_hidden_size), nn.ReLU(),
+            nn.Linear(prev, stream_hidden_size),
+            nn.ReLU(),
             nn.Linear(stream_hidden_size, action_dim),
         )
 
-    def forward(self, state: "torch.Tensor") -> "torch.Tensor":
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
         features = self.feature(state)
         values = self.value_stream(features)
         advantages = self.advantage_stream(features)

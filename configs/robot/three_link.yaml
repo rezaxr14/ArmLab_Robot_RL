@@ -1,0 +1,23 @@
+# Robot geometry for the 3-link spatial arm.
+#
+# UNITS
+#   The current default implementation (and every published result in this
+#   repository so far) uses the legacy unit system where the original demo
+#   used link lengths [5, 10, 8]. To avoid silently changing the meaning of
+#   those numbers, the values below are expressed in the SAME legacy units.
+#   Legacy units are converted to SI with `legacy_unit_scale_m`:
+#       SI length [m] = legacy length * legacy_unit_scale_m
+#   With the values below that maps to base column 0.5 m, shoulder link
+#   1.0 m and forearm link 0.8 m — the geometry used by the MuJoCo model.
+#   Angles are radians in both systems.
+#
+# JOINT CONVENTION
+#   q = [waist (theta1, about world +z), shoulder (theta2, from vertical +z,
+#        positive tilts toward +x at theta1 = 0), elbow (theta3, relative to
+#        the second link, 0 = fully extended)].
+name: three_link_arm
+units: legacy
+legacy_unit_scale_m: 0.1
+link_lengths: [5.0, 10.0, 8.0]
+joint_limits_low: [-3.141592653589793, -1.5707963267948966, -3.141592653589793]
+joint_limits_high: [3.141592653589793, 1.5707963267948966, 3.141592653589793]

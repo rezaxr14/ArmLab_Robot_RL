@@ -31,8 +31,14 @@ class TestReplayBuffer:
     def test_add_and_sample(self):
         buf = ReplayBuffer(capacity=100, batch_size=8, seed=0)
         for i in range(20):
-            buf.add(np.full(9, i, dtype=np.float32), i % 6, 1.0,
-                    np.full(9, i + 1, dtype=np.float32), False, False)
+            buf.add(
+                np.full(9, i, dtype=np.float32),
+                i % 6,
+                1.0,
+                np.full(9, i + 1, dtype=np.float32),
+                False,
+                False,
+            )
         assert len(buf) == 20
         states, actions, rewards, next_states, term, trunc = buf.sample()
         assert states.shape == (8, 9)
@@ -42,24 +48,30 @@ class TestReplayBuffer:
     def test_capacity_wrap(self):
         buf = ReplayBuffer(capacity=10, batch_size=4, seed=0)
         for i in range(25):
-            buf.add(np.zeros(3, dtype=np.float32), 0, 0.0,
-                    np.zeros(3, dtype=np.float32), False, False)
+            buf.add(
+                np.zeros(3, dtype=np.float32), 0, 0.0, np.zeros(3, dtype=np.float32), False, False
+            )
         assert len(buf) == 10
 
     def test_seeded_sampling_reproducible(self):
         def sample_first():
             buf = ReplayBuffer(capacity=50, batch_size=8, seed=42)
             for i in range(30):
-                buf.add(np.full(3, i, dtype=np.float32), 0, 0.0,
-                        np.zeros(3, dtype=np.float32), False, False)
+                buf.add(
+                    np.full(3, i, dtype=np.float32),
+                    0,
+                    0.0,
+                    np.zeros(3, dtype=np.float32),
+                    False,
+                    False,
+                )
             return buf.sample()[0].numpy()
 
         np.testing.assert_allclose(sample_first(), sample_first())
 
     def test_insufficient_samples(self):
         buf = ReplayBuffer(capacity=10, batch_size=8, seed=0)
-        buf.add(np.zeros(3, dtype=np.float32), 0, 0.0,
-                np.zeros(3, dtype=np.float32), False, False)
+        buf.add(np.zeros(3, dtype=np.float32), 0, 0.0, np.zeros(3, dtype=np.float32), False, False)
         with pytest.raises(ValueError):
             buf.sample()
 
@@ -69,10 +81,10 @@ class TestReplayBuffer:
         with pytest.raises(ValueError):
             ReplayBuffer(capacity=4, batch_size=8)
 
+
 class TestAgent:
     def test_target_initialized_equal_to_local(self, agent):
-        for tp, lp in zip(agent.qnetwork_target.parameters(),
-                          agent.qnetwork_local.parameters()):
+        for tp, lp in zip(agent.qnetwork_target.parameters(), agent.qnetwork_local.parameters()):
             assert torch.equal(tp, lp)
 
     def test_epsilon_schedule(self):
@@ -107,8 +119,7 @@ class TestAgent:
                 p.add_(1.0)
         agent.learn_steps = 2  # multiple of target_update_every
         agent._maybe_update_target()
-        for tp, lp in zip(agent.qnetwork_target.parameters(),
-                          agent.qnetwork_local.parameters()):
+        for tp, lp in zip(agent.qnetwork_target.parameters(), agent.qnetwork_local.parameters()):
             assert torch.equal(tp, lp)
 
     def test_soft_update_polyak(self):
@@ -127,17 +138,28 @@ class TestAgent:
     def test_learn_updates_without_error(self, agent):
         rng = np.random.default_rng(0)
         for _ in range(32):
-            agent.memory.add(rng.standard_normal(9).astype(np.float32),
-                             int(rng.integers(0, 6)), float(rng.standard_normal()),
-                             rng.standard_normal(9).astype(np.float32), False, False)
+            agent.memory.add(
+                rng.standard_normal(9).astype(np.float32),
+                int(rng.integers(0, 6)),
+                float(rng.standard_normal()),
+                rng.standard_normal(9).astype(np.float32),
+                False,
+                False,
+            )
         assert np.isfinite(agent.learn())
 
     def test_learn_separated_terminated_truncated(self, agent):
         rng = np.random.default_rng(1)
         for i in range(32):
             term = i % 2 == 0
-            agent.memory.add(rng.standard_normal(9).astype(np.float32), i % 6, 0.0,
-                             rng.standard_normal(9).astype(np.float32), term, not term)
+            agent.memory.add(
+                rng.standard_normal(9).astype(np.float32),
+                i % 6,
+                0.0,
+                rng.standard_normal(9).astype(np.float32),
+                term,
+                not term,
+            )
         assert np.isfinite(agent.learn())
 
     def test_gradient_clip_applied(self, monkeypatch):
@@ -147,8 +169,14 @@ class TestAgent:
         agent = DQNAgent(9, 6, config=cfg, seed=0)
         rng = np.random.default_rng(2)
         for _ in range(16):
-            agent.memory.add(rng.standard_normal(9).astype(np.float32), 0, 100.0,
-                             rng.standard_normal(9).astype(np.float32), False, False)
+            agent.memory.add(
+                rng.standard_normal(9).astype(np.float32),
+                0,
+                100.0,
+                rng.standard_normal(9).astype(np.float32),
+                False,
+                False,
+            )
         recorded = {}
         import torch.nn.utils as tnu
 
@@ -167,23 +195,34 @@ class TestAgent:
         agent = DQNAgent(9, 6, config=cfg, seed=0)
         rng = np.random.default_rng(3)
         for i in range(16):
-            agent.step(rng.standard_normal(9).astype(np.float32), i % 6, 1.0,
-                       rng.standard_normal(9).astype(np.float32), False, False)
+            agent.step(
+                rng.standard_normal(9).astype(np.float32),
+                i % 6,
+                1.0,
+                rng.standard_normal(9).astype(np.float32),
+                False,
+                False,
+            )
         assert agent.learn_steps >= 1
 
     def test_checkpoint_round_trip(self, agent, tmp_path):
         rng = np.random.default_rng(4)
         for i in range(10):
-            agent.step(rng.standard_normal(9).astype(np.float32), i % 6, 0.5,
-                       rng.standard_normal(9).astype(np.float32), False, False)
+            agent.step(
+                rng.standard_normal(9).astype(np.float32),
+                i % 6,
+                0.5,
+                rng.standard_normal(9).astype(np.float32),
+                False,
+                False,
+            )
         path = tmp_path / "ckpt.pt"
         agent.save_checkpoint(path)
 
         agent2 = DQNAgent(9, 6, config=RLConfig(batch_size=16), seed=99)
         agent2.load_checkpoint(path)
         assert agent2.env_steps == agent.env_steps
-        for p1, p2 in zip(agent.qnetwork_local.parameters(),
-                          agent2.qnetwork_local.parameters()):
+        for p1, p2 in zip(agent.qnetwork_local.parameters(), agent2.qnetwork_local.parameters()):
             assert torch.equal(p1, p2)
 
     def test_checkpoint_dim_mismatch(self, agent, tmp_path):

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 
@@ -47,8 +46,8 @@ class DQNAgent:
         self,
         state_dim: int,
         action_dim: int,
-        config: Optional[RLConfig] = None,
-        device: Union[str, "torch.device"] = "cpu",
+        config: RLConfig | None = None,
+        device: str | torch.device = "cpu",
         seed: int = 0,
     ) -> None:
         if state_dim < 1 or action_dim < 1:
@@ -72,15 +71,14 @@ class DQNAgent:
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=cfg.lr)
         self.loss_fn = nn.SmoothL1Loss()  # Huber
 
-        self.memory = ReplayBuffer(
-            cfg.buffer_size, cfg.batch_size, seed=seed, device=self.device
-        )
+        self.memory = ReplayBuffer(cfg.buffer_size, cfg.batch_size, seed=seed, device=self.device)
         self.rng = np.random.default_rng(seed)
         random.seed(seed)
 
         # Fix 1: epsilon is an explicit function of env steps.
         self.env_steps = 0
         self.learn_steps = 0
+        self.last_loss: float = float("nan")
 
     # ----------------------------------------------------------- epsilon
     @property
@@ -93,7 +91,7 @@ class DQNAgent:
         return self.epsilon
 
     # -------------------------------------------------------------- act
-    def choose_action(self, state: np.ndarray, greedy: bool = False) -> Union[int, np.ndarray]:
+    def choose_action(self, state: np.ndarray, greedy: bool = False) -> int | np.ndarray:
         """Epsilon-greedy action selection.
 
         A single state of shape (state_dim,) returns a Python int; a batch of
@@ -133,7 +131,11 @@ class DQNAgent:
         terminated: bool,
         truncated: bool,
     ) -> None:
-        """Store one transition and learn every ``learn_every`` steps."""
+        """Store one transition and learn every ``learn_every`` steps.
+
+        Returns the loss of this step's gradient update, or ``None`` when no
+        update occurred (warm-up / schedule).
+        """
         self.memory.add(state, action, reward, next_state, terminated, truncated)
         self.decay_epsilon()  # advances env_steps by one
         if self.env_steps % self.config.learn_every == 0 and len(self.memory) >= max(
@@ -141,7 +143,10 @@ class DQNAgent:
         ):
             loss = self.learn()
             self.learn_steps += 1
+            self.last_loss = float(loss)
             self._maybe_update_target()
+            return float(loss)
+        return None
 
     def learn(self) -> float:
         """One Double-DQN gradient step; returns the loss value."""
@@ -180,7 +185,9 @@ class DQNAgent:
         tau = self.config.tau
         with torch.no_grad():
             for tp, lp in zip(
-                self.qnetwork_target.parameters(), self.qnetwork_local.parameters()
+                self.qnetwork_target.parameters(),
+                self.qnetwork_local.parameters(),
+                strict=False,
             ):
                 tp.data.mul_(1.0 - tau).add_(lp.data, alpha=tau)
 
@@ -189,7 +196,7 @@ class DQNAgent:
         self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
 
     # ------------------------------------------------------- checkpoints
-    def save_checkpoint(self, path: Union[str, Path]) -> None:
+    def save_checkpoint(self, path: str | Path) -> None:
         """Save model, optimizer, and schedules to ``path``."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -207,10 +214,13 @@ class DQNAgent:
             path,
         )
 
-    def load_checkpoint(self, path: Union[str, Path]) -> None:
+    def load_checkpoint(self, path: str | Path) -> None:
         """Restore a checkpoint saved by ``save_checkpoint``."""
         payload = torch.load(Path(path), map_location=self.device, weights_only=False)
-        if payload.get("state_dim") != self.state_dim or payload.get("action_dim") != self.action_dim:
+        if (
+            payload.get("state_dim") != self.state_dim
+            or payload.get("action_dim") != self.action_dim
+        ):
             raise ValueError(
                 "Checkpoint dims do not match agent: "
                 f"ckpt=({payload.get('state_dim')}, {payload.get('action_dim')}), "
@@ -227,6 +237,12 @@ class DQNAgent:
         # epsilon is derived from env_steps; jumping far ahead reaches min.
         self.env_steps = max(
             self.env_steps,
-            int(np.ceil(np.log(self.config.epsilon_min / self.config.epsilon_start) /
-                        np.log(self.config.epsilon_decay))) if self.config.epsilon_decay < 1 else 0,
+            int(
+                np.ceil(
+                    np.log(self.config.epsilon_min / self.config.epsilon_start)
+                    / np.log(self.config.epsilon_decay)
+                )
+            )
+            if self.config.epsilon_decay < 1
+            else 0,
         )
