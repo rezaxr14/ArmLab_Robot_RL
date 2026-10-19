@@ -119,6 +119,38 @@ needed before these policies are competitive; the full configs specify 300
 episodes / 50,000 timesteps. The runs above exist to prove that training,
 checkpointing, loading and standardized evaluation work end to end.
 
+## GPU-trained policies (measured)
+
+Training and evaluation were run on an NVIDIA RTX 4050 Laptop GPU with
+`torch 2.11.0+cu128` and `stable-baselines3 2.9.0` (device selected with
+`--device cuda`):
+
+```bash
+python -m armlab train dqn --config configs/train/dqn.yaml \
+  --episodes 600 --max-steps 150000 --eval-every 25 --seed 7 --device cuda \
+  --output-dir results/gpu/dqn
+python -m armlab train sac --config configs/train/sac.yaml \
+  --total-timesteps 60000 --seed 7 --device cuda --output-dir results/gpu/sac
+```
+
+| run | budget | greedy training-time eval | held-out eval (`base_eval_seed=100000`) |
+|:--|:--|--:|--:|
+| DQN (Dueling Double DQN) | 600 episodes / 42,357 env steps / 332 s | 1.00 (10 episodes) | **0.70 (7/10)**; mean final error 1.117, mean min error 0.921 |
+| SAC (Stable-Baselines3) | 60,000 timesteps / 2,174 s | not measured during training | **0.40 (4/10)**; mean final error 1.311, median 1.287 |
+
+The DQN checkpoint was re-evaluated through the **standard interface** on a
+separate held-out suite:
+
+```bash
+python -m armlab evaluate --scenario static_reaching --controller dqn \
+  --checkpoint results/gpu/dqn/train_dqn_seed7/latest.best \
+  --episodes 10 --seed 7 --output-dir results/gpu/eval-dqn --final
+```
+
+The gap between the 1.00 training-time greedy evaluation and the 0.70 held-out
+suite is reported rather than hidden. This is **still not** the final
+multi-seed benchmark (≥5 seeds × ≥100 episodes); no convergence claim is made.
+
 ## Failure analysis: DLS local minima
 
 The `jacobian` controller computes `dq = J^T (J J^T + λ²I)^-1 dx`, clips each
@@ -136,7 +168,8 @@ candidate motions.
 
 - No final benchmark: the plan asks for ≥5 training seeds and ≥100 held-out
   episodes for reported numbers. The suite above is a 20-episode smoke suite.
-- No GPU runs; all training is CPU smoke.
+- GPU training is limited to a single seed per algorithm on one RTX 4050; the
+  CPU smoke suite above is also retained. Neither is a multi-seed benchmark.
 - The dashboard test is skipped locally because `dash`/`plotly` are not
   installed in the development environment. The base package and CLI do not
   require them.
