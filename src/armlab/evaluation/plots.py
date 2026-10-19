@@ -171,7 +171,14 @@ def plot_error_distributions(
 
     plt = _plt()
     fig, ax = plt.subplots(figsize=(max(6, len(labels) * 1.1), 4.5))
-    ax.boxplot(distributions, labels=labels)
+    # Matplotlib renamed the boxplot `labels` argument to `tick_labels`
+    # (deprecated in 3.9, removed later). Pick whichever the installed
+    # version supports so CI and local environments agree.
+    import inspect
+
+    boxplot_params = inspect.signature(ax.boxplot).parameters
+    label_kwarg = "tick_labels" if "tick_labels" in boxplot_params else "labels"
+    ax.boxplot(distributions, **{label_kwarg: labels})
     ax.set_ylabel("final end-effector error")
     ax.set_title("Final error distribution (per episode, measured)")
     plt.setp(ax.get_xticklabels(), rotation=30, ha="right")

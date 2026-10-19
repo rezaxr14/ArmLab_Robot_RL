@@ -29,6 +29,17 @@ class TestParser:
         with pytest.raises(SystemExit):
             build_parser().parse_args(["evaluate", "--controller", "ik"])
 
+    def test_train_device_flags(self):
+        assert build_parser().parse_args(["train", "dqn", "--device", "cuda"]).device == "cuda"
+        assert build_parser().parse_args(["train", "sac", "--device", "cpu"]).device == "cpu"
+
+    def test_resolve_device_override_and_auto(self):
+        from armlab.cli import _resolve_device
+
+        assert _resolve_device("cpu") == "cpu"
+        assert _resolve_device("cuda") == "cuda"
+        assert _resolve_device("auto") in {"cpu", "cuda"}
+
 
 class TestCommands:
     def test_doctor(self, capsys):
