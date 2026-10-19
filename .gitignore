@@ -20,7 +20,10 @@ htmlcov/
 
 # --- Local artifacts (results, checkpoints, media) ---
 artifacts/
+results/
 *.pth
+*.pt
+*.zip
 !RL_Double_Dueling_DQN/qnetwork.pth
 *.mp4
 *.gif
