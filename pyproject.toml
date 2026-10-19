@@ -4,21 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armlab"
-version = "0.1.0"
+version = "0.2.0"
 description = "ArmLab: a reproducible robotics control, simulation, and RL benchmark for a 3-link spatial arm."
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = [
     "numpy>=1.24",
     "gymnasium>=0.29",
     "matplotlib>=3.7",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
-rl = ["torch>=2.0"]
+rl = ["torch>=2.0", "stable-baselines3>=2.3"]
 physics = ["mujoco>=3.0"]
-dashboard = ["dash>=2.14", "plotly>=5.18"]
-dev = ["pytest>=7.4", "torch>=2.0"]
+ui = ["dash>=2.14", "plotly>=5.18"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.5",
+    "PyYAML>=6.0",
+]
 
 [project.scripts]
 armlab = "armlab.cli:main"
@@ -26,6 +33,33 @@ armlab = "armlab.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+armlab = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["Analytical_Inverse_Kinematics", "RL_Double_Dueling_DQN", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = [
+    "E501",   # line length is enforced for new code review, not as a hard gate
+    "B027",   # optional no-op hook in the Controller base class
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use pytest.importorskip before importing the module under test, and
+# compare parallel sequences where equal length is part of the fixture.
+"tests/*" = ["E402", "B007", "B905", "B011"]
+
+[tool.coverage.run]
+source = ["armlab"]
+omit = ["src/armlab/dashboard/*"]

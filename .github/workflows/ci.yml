@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    name: base (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install base + dev extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: python -m ruff check src tests
+
+      - name: Ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Pytest with coverage
+        run: python -m pytest --cov=armlab --cov-report=term-missing
+
+      - name: CLI help and doctor smoke tests
+        run: |
+          python -m armlab --help
+          python -m armlab demo --help
+          python -m armlab train --help
+          python -m armlab doctor
+
+      - name: Deterministic headless environment episode
+        run: |
+          python - <<'PY'
+          import gymnasium as gym
+          from armlab.envs import register_envs
+          register_envs()
+          env = gym.make("ArmLabKinematic-v0")
+          obs, info = env.reset(seed=123)
+          total = 0.0
+          for _ in range(20):
+              obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+              assert obs.shape == env.observation_space.shape
+              assert obs.dtype == env.observation_space.dtype
+              total += reward
+              if terminated or truncated:
+                  break
+          env.close()
+          print("episode ok, return =", total)
+          PY
+
+      - name: DQN tiny training + checkpoint smoke test
+        run: |
+          python -m armlab train dqn --episodes 2 --max-steps 120 \
+            --eval-every 1 --eval-seed 11 --seed 11 \
+            --output-dir "$RUNNER_TEMP/dqn-smoke"
+
+      - name: Report/replay artifact smoke test
+        run: |
+          python -m armlab evaluate --scenario static_reaching --controller ik \
+            --episodes 2 --output-dir "$RUNNER_TEMP/eval-smoke"
+          RUN_DIR=$(python - <<'PY'
+          from armlab.evaluation.artifacts import discover_runs
+          import os
+          print(discover_runs(os.environ["RUNNER_TEMP"] + "/eval-smoke")[0])
+          PY
+          )
+          python -m armlab report --run "$RUN_DIR"
+          python -m armlab replay --run "$RUN_DIR" --episode 0
+
+  physics:
+    name: physics extra (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install base + physics + dev
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[physics,dev]"
+
+      - name: MuJoCo model, kinematics agreement, contacts
+        run: python -m pytest tests/test_physics.py -q
+
+      - name: Headless physics demo
+        run: python -m armlab demo physics --headless --steps 20
