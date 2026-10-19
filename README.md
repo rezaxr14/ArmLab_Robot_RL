@@ -1,125 +1,317 @@
-# 3D Robotic Arm Control: From Inverse Kinematics to Reinforcement Learning
+# ArmLab
 
-This project provides a comprehensive simulation and control suite for a 3-link robotic arm in a 3D environment. It explores two distinct methods for controlling the robot to reach a target: a precise **Analytical Inverse Kinematics (IK)** solver and a modern **Deep Q-Network (DQN) Reinforcement Learning (RL)** agent.
+**A reproducible 3-link robot-arm benchmark that puts classical control
+(analytical IK, PD, damped-least-squares Jacobian, MPC, RRT) and learned
+policies (Dueling Double DQN, SAC) on the same task, robot model and evaluation
+schema — in kinematics and, optionally, MuJoCo physics.**
 
----
+ArmLab grew out of a 3D robot-arm demo that could solve inverse kinematics and
+train a DQN. The engineering goal here is narrower and more useful: make the
+math correct and tested, make training reproducible and checkpointed, and make
+every controller comparable through one measured, versioned results format.
 
-### 🎬 Project Demonstration
-
-Watch the robot arm in action! The video below showcases both the analytical solver tracking a moving target and the trained reinforcement learning agent successfully reaching its goals.
-
-[![RL Robot Arm Demo](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/Screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "RL Robot Arm Demo")
-
----
-
-### 📸 Screenshots
-
-| Analytical IK in Action | RL Agent Reaching Target |
-| :---------------------: | :----------------------: |
-| ![IK Tracking](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/Screenshots/inv_kin_Figure_2.png) | ![RL Success](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/Screenshots/RL_Figure_1.png) |
-| Analytical IK in Action | RL Agent Reaching Target |
-| :--------------------------: | :---------------------: |
-| ![Starting Game Background 1](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/Screenshots/inv_kin_Figure_1.png) | ![RL Agent Reaching Target](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/Screenshots/RL_Figure_4.png) |
+> **Honesty note:** the reported table below is a **20-episode smoke suite** on
+> the kinematic task, not a converged multi-seed benchmark. RL smoke runs are
+> labelled as such and are not evidence of convergence. See
+> [`docs/experiments.md`](docs/experiments.md) for protocol and failure
+> analysis.
 
 ---
 
-## ✨ Features
+## Demo
 
-This project is divided into two main parts, each demonstrating a different control paradigm.
+The original demonstration still runs and shows analytical IK tracking a moving
+target and a trained DQN reaching goals:
 
-### Part 1: Analytical Inverse Kinematics
-- **`robot.py`**: Defines the robot's physical properties and contains the core mathematical solvers.
-- **`forward_kinematics`**: Calculates the end-effector's 3D position from given joint angles.
-- **`inverse_kinematics`**: Analytically calculates the required joint angles to reach a specific `(x, y, z)` target.
-  - **Solution Selection**: Intelligently calculates both "elbow up" and "elbow down" solutions and chooses the one that requires the smallest change, preventing unnatural "flipping."
-  - **Singularity Handling**: Gracefully manages the singularity at the robot's base (`z-axis`), preventing the arm from "resetting" when the target is directly overhead.
-- **`visualizer.py`**: A clean `matplotlib`-based 3D visualizer to plot the robot's movement in real-time.
-- **`main.py`**: A controller script that demonstrates the IK solver by having the arm smoothly track a moving target.
+[![Robot arm demo](Screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "Robot arm demo")
 
-### Part 2: Reinforcement Learning (Deep Q-Network)
-- **`robot_env.py`**: A custom environment built following the `Gymnasium` (formerly OpenAI Gym) API standard. It defines the state space, action space, and reward function.
-- **`agent.py`**: Implements a **Deep Q-Network (DQN)** agent using PyTorch.
-  - **Q-Network**: A neural network that learns to predict the expected long-term reward for each action.
-  - **Replay Buffer**: Stores past experiences to stabilize and improve learning.
-  - **Epsilon-Greedy Policy**: Balances exploration (trying new things) and exploitation (using known good actions).
-- **`train.py`**: The main training script that allows the agent to interact with the environment for thousands of episodes to learn a control policy.
-- **`test.py`**: A script to load the trained agent and watch it perform the task.
-- **GPU Acceleration**: Automatically detects and utilizes a CUDA-enabled GPU to dramatically speed up the training process.
+| Analytical IK tracking | RL reaching |
+|:--:|:--:|
+| ![IK tracking](Screenshots/inv_kin_Figure_2.png) | ![RL success](Screenshots/RL_Figure_1.png) |
+| ![IK tracking pose](Screenshots/inv_kin_Figure_1.png) | ![RL target](Screenshots/RL_Figure_4.png) |
+
+Reproducible headless runs also generate their own plots and trajectory
+artifacts (see the results section).
 
 ---
 
-## 🛠️ Technologies Used
+## What is implemented
 
-- **Python 3**
-- **NumPy**: For numerical operations and vector math.
-- **Matplotlib**: For 3D visualization of the robot and environment.
-- **PyTorch**: For building and training the Deep Q-Network.
-- **Gymnasium**: For providing the standardized environment structure for reinforcement learning.
+- **Correct, tested kinematics.** One `RobotKinematics` source of truth for FK,
+  analytical IK (both elbow branches, closest-branch selection, joint limits,
+  reachability, singular cases), the geometric Jacobian and damped least
+  squares.
+- **Classical controllers.** Analytical IK + joint P/PD tracking, resolved-rate
+  damped-least-squares Cartesian control, random-shooting MPC, and an
+  RRT-Connect path planner tracked by a low-level controller.
+- **Gymnasium environments.** Discrete (`ArmLabKinematic-v0`) and continuous
+  (`ArmLabKinematicContinuous-v0`) reaching, a moving-target environment, and
+  seeded, reachable target sampling. Seeded resets, joint-limit containment,
+  `terminated` vs `truncated` semantics, reward components in `info`, and
+  `check_env` coverage.
+- **Dueling Double DQN from scratch.** Target-network initialization/freezing,
+  Double-DQN target selection, seeded replay buffer, soft/hard target updates,
+  gradient clipping, full resumable checkpoints and CSV/JSON training metrics.
+- **SAC baseline via Stable-Baselines3** on the continuous-action task, with
+  saved model + evaluation metrics and deterministic evaluation.
+- **MuJoCo physics (optional).** Programmatically generated 3-link MJCF,
+  velocity actuators, joint limits, contact detection, deterministic reset, and
+  a test that the MuJoCo end-effector site agrees with analytical FK.
+- **Named scenarios.** `static_reaching`, `boundary_reaching`, `moving_target`,
+  `collision_avoidance`, all seeded and held out from training.
+- **Standardized evaluation + artifacts.** Schema-1.0 run directories with
+  `metadata.json`, `episodes.csv`, `summary.json`, `metrics.csv` and NPZ
+  trajectories; plots and reports generated only from saved data.
+- **CLI, replay and optional dashboard.** `python -m armlab` with `doctor`,
+  `demo`, `train`, `evaluate`, `benchmark`, `report`, `replay` and `dashboard`.
+- **Tests and CI.** 200+ deterministic tests that run on CPU without a
+  display; GitHub Actions for base + optional physics.
+
+### Not implemented (do not assume it exists)
+
+- A **final** multi-seed benchmark (≥5 training seeds × ≥100 held-out episodes).
+  The current results are explicitly a smoke suite.
+- Robustness scenarios beyond held-out targets: `perturbed_dynamics`,
+  `sensor_noise_delay`, `unseen_targets` are not wired into the scenario
+  registry yet.
+- Six-DOF/UR5e models, grippers, pick-and-place, ROS 2 or hardware control, and
+  any sim-to-real claim.
+- Vectorized/multi-process training and hosted experiment tracking.
+- A browser-hosted simulator.
 
 ---
 
-## 🚀 Setup and Installation
+## Architecture
 
-Follow these steps to get the project running on your local machine.
+```text
+configs/*.yaml ──► configio ──► frozen dataclasses (config.py)
+                                      │
+                    ┌─────────────────┴──────────────────┐
+                    ▼                                    ▼
+             kinematics.py                        controllers/  (classical)
+        (FK / IK / Jacobian / DLS)                        │
+                    │                                     │
+                    ▼                                     ▼
+             envs/ (Gymnasium) ◄──────────── rl/ (DQN, SAC)
+                    │
+                    ▼
+     evaluation/runner + metrics + benchmark
+                    │
+                    ▼
+     results/<run-id>/{metadata,episodes,summary,metrics,trajectory}
+                    │
+          ┌─────────┴──────────┐
+          ▼                    ▼
+   evaluation/plots.py   visualization/replay, dashboard
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git](https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git)
-    cd 3D-Robot-Control-RL-Analytical
-    ```
-
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-    ```
-
-3.  **Install the required packages:**
-    ```bash
-    pip install numpy matplotlib torch gymnasium
-    ```
-    *(**Note:** If you have a CUDA-enabled GPU, make sure to install the appropriate version of PyTorch by following the instructions on the [official PyTorch website](https://pytorch.org/get-started/locally/)).*
+Every environment, controller, planner, metric and visualizer uses the same
+`RobotKinematics`; no module re-derives link positions. Optional dependencies
+(MuJoCo, Stable-Baselines3, Dash/Plotly) are imported lazily. Full details:
+[`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-## 💡 How to Use
-
-### Running the Inverse Kinematics Demo
-
-To see the analytical solver in action, navigate to the `Analytical_Inverse_Kinematics` directory and run `main.py`.
+## Installation
 
 ```bash
-cd Analytical_Inverse_Kinematics
-python main.py
+git clone https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git
+cd 3D-Robot-Control-RL-Analytical
+python -m venv .venv
+
+# Linux/macOS
+source .venv/bin/activate
+# Windows PowerShell
+# .\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
-A `matplotlib` window will appear showing the robot arm smoothly tracking a moving red star.
 
-### Training the Reinforcement Learning Agent
-
-To train the RL agent, navigate to the `RL_Double_Dueling_DQN` directory and run the `train.py` script.
+Optional extras:
 
 ```bash
-cd RL_Double_Dueling_DQN
-python train.py
+python -m pip install -e ".[rl]"        # torch + Stable-Baselines3 (SAC)
+python -m pip install -e ".[physics]"   # MuJoCo
+python -m pip install -e ".[ui]"        # Dash + Plotly dashboard
 ```
-- Training will begin and run significantly faster if a GPU is detected.
-- Progress will be printed to the console.
-- Once complete, the trained model will be saved as `qnetwork.pth`, and a plot of the training performance will be displayed.
 
-### Testing the Trained Agent
-
-After training is complete, you can watch your smart agent in action by running the `test.py` script.
-
-```bash
-python test.py
-```
-A `matplotlib` window will appear, and you will see the agent efficiently guiding the robot arm to the target in each new episode.
+The base install needs no GPU, display, MuJoCo or Dash.
 
 ---
 
-## 🔮 Future Improvements That Can Be Made
+## Quick start (commands tested on this checkout)
 
-- **Continuous Action Space**: Implement a more advanced RL agent (like DDPG or SAC) that can output continuous joint angles instead of discrete steps.
-- **Obstacle Avoidance**: Add obstacles to the environment and modify the reward function to teach the agent to avoid collisions.
-- **Joint Limits**: Add physical constraints to the robot's joints to make the simulation more realistic.
-- **Hyperparameter Tuning**: Experiment with different neural network architectures, learning rates, and other hyperparameters to optimize training performance.
+```bash
+# Environment / optional-dependency report
+python -m armlab doctor
+
+# Headless demos
+python -m armlab demo ik --headless --trials 5
+python -m armlab demo physics --headless --steps 20   # requires physics extra
+
+# Evaluate a controller; writes a run directory under results/
+python -m armlab evaluate --scenario static_reaching --controller ik --episodes 5
+python -m armlab evaluate --scenario static_reaching --controller jacobian --episodes 5
+
+# Smoke training (not convergence)
+python -m armlab train dqn --episodes 20 --max-steps 2000 --eval-every 5 --seed 7
+python -m armlab train sac --total-timesteps 2000 --seed 7
+
+# Evaluate a saved RL checkpoint
+python -m armlab evaluate --scenario static_reaching --controller dqn \
+  --checkpoint results/train_dqn_seed7/latest.pt --episodes 5
+
+# Benchmark + reports + replay
+python -m armlab benchmark --suite default --config configs/benchmark/default.yaml
+python -m armlab report --run results/<run-id>
+python -m armlab replay --run results/<run-id> --episode 0
+
+# Optional dashboard
+python -m armlab dashboard --results results
+```
+
+All paths are relative to the current working directory.
+
+---
+
+## Controllers
+
+| name | type | summary |
+|:--|:--|:--|
+| `ik` | classical | analytical IK branch + bounded joint P control |
+| `pd` | classical | analytical IK target + joint PD tracking |
+| `jacobian` | classical | resolved-rate damped least squares on Cartesian error; clips steps and projects onto joint limits |
+| `mpc` | classical | random-shooting MPC over a short horizon on the kinematic model |
+| `rrt` | classical | RRT-Connect joint-space path, then tracked by a low-level controller |
+| `dqn` | learned | from-scratch Dueling Double DQN, discrete joint increments |
+| `sac` | learned | Stable-Baselines3 SAC, continuous bounded joint increments |
+
+Classical controllers are evaluated in the **continuous** environment so their
+true bounded commands are used. DQN and SAC keep their native action spaces.
+
+Math reference (frames, FK/IK equations, Jacobian, damping, reward):
+[`docs/mathematical_conventions.md`](docs/mathematical_conventions.md).
+
+---
+
+## Measured results (smoke suite — not a final benchmark)
+
+Command:
+
+```bash
+python -m armlab benchmark --suite default \
+  --config configs/benchmark/default.yaml \
+  --output-dir results/smoke-default
+```
+
+Kinematic task, 20 held-out episodes per cell, `base_eval_seed = 100000`,
+success threshold `1.0` legacy unit. `mean final error` is in the same legacy
+units.
+
+| scenario | controller | success | mean final error |
+|:--|:--|--:|--:|
+| static_reaching | ik | 1.00 | 0.635 |
+| static_reaching | jacobian | **0.50** | 2.803 |
+| static_reaching | pd | 1.00 | 0.684 |
+| static_reaching | mpc | 1.00 | 0.774 |
+| boundary_reaching | ik | 1.00 | 1.045 |
+| boundary_reaching | jacobian | 1.00 | 2.905 |
+| boundary_reaching | pd | 1.00 | 1.152 |
+| boundary_reaching | mpc | 1.00 | 0.693 |
+| moving_target | ik | 1.00 | 0.022 |
+| moving_target | jacobian | 1.00 | 1.086 |
+| moving_target | pd | 1.00 | 0.024 |
+| moving_target | mpc | 1.00 | 0.013 |
+| collision_avoidance | ik | 1.00 | 0.635 |
+| collision_avoidance | jacobian | **0.50** | 2.803 |
+| collision_avoidance | pd | 1.00 | 0.684 |
+| collision_avoidance | mpc | 1.00 | 0.774 |
+
+Generated plots: `results/smoke-default/benchmark_success.png` and
+`results/smoke-default/benchmark_errors.png`.
+
+### Failure case worth showing
+
+The Jacobian/DLS controller succeeds only half the time on static and
+collision-avoidance seeds. It is a local method: a joint can reach a limit while
+the Cartesian error still points through that limit, so the projected update
+stalls just outside tolerance. The collision-avoidance run also records 3
+approximate obstacle penetrations. This is reported rather than tuned away; see
+[`docs/experiments.md`](docs/experiments.md) for the analysis and possible
+fixes (limit-avoidance/null-space term, stall re-seeding).
+
+RL smoke runs (2,000-step budgets) reached 0.00 eval success — expected for
+undertrained agents. They are reported to prove the train → checkpoint → load →
+evaluate path, not to claim learning. Full details in
+[`docs/experiments.md`](docs/experiments.md).
+
+---
+
+## Reproduce the results
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m armlab benchmark --suite default \
+  --config configs/benchmark/default.yaml --output-dir results/smoke-default
+python -m armlab report --results results/smoke-default
+```
+
+A real benchmark requires editing `configs/benchmark/default.yaml`
+(`smoke: false`, more episodes/seeds) and substantially more compute.
+
+---
+
+## Limitations
+
+- Lengths use the legacy unit system (`link_lengths = [5, 10, 8]` treated as
+  metres). `legacy_unit_scale_m: 0.1` documents the intended SI mapping but is
+  **not applied**; changing it would silently alter every existing number.
+- Physics parameters (masses, inertia, damping) are illustrative, not measured.
+- Collision checks in the kinematic benchmark are approximate capsule tests,
+  not MuJoCo contacts.
+- The DLS controller has the documented local-minimum failure; MPC and IK/PD do
+  not on these seeds.
+- The dashboard requires the `ui` extra and is not covered by the local test
+  run (its test skips when Dash/Plotly are absent).
+- No sim-to-real, hardware, grasping or six-DOF claims.
+
+---
+
+## Project structure
+
+```text
+src/armlab/           # package: kinematics, controllers, envs, physics,
+                      # planning, rl, evaluation, visualization, cli, dashboard
+configs/              # validated robot/env/train/benchmark YAML
+tests/                # deterministic unit + integration + regression tests
+docs/                 # architecture, math conventions, experiments,
+                      # troubleshooting, baseline audit
+Analytical_Inverse_Kinematics/   # original demo + historical IK bug reference
+RL_Double_Dueling_DQN/           # original demo
+Screenshots/          # README media
+```
+
+---
+
+## Testing and contributing
+
+```bash
+python -m pytest
+python -m ruff check src tests
+python -m ruff format --check src tests
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, conventions and how to add
+controllers/scenarios. Tests that need optional dependencies skip cleanly when
+those packages are absent.
+
+---
+
+## License and attribution
+
+The project is distributed under the MIT license (`pyproject.toml`). MuJoCo,
+PyTorch, Stable-Baselines3, Gymnasium and Dash/Plotly remain under their own
+licenses. No third-party robot meshes are redistributed; the MuJoCo model is
+generated from configuration.
