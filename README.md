@@ -33,6 +33,31 @@ target and a trained DQN reaching goals:
 Reproducible headless runs also generate their own plots and trajectory
 artifacts (see the results section).
 
+### Training and rollout figures (generated from real run artifacts)
+
+The images below are rendered by
+[`scripts/make_readme_assets.py`](scripts/make_readme_assets.py) from the
+recorded `training_metrics.json`, `sac_metrics_seed*.json`, `trajectory_*.npz`
+and benchmark summaries — they are not mockups or hand-drawn diagrams.
+
+| DQN training (RTX 4050, seed 7) | SAC training (RTX 4050, seed 7) |
+|:--:|:--:|
+| ![DQN training curve](docs/assets/training_dqn.png) | ![SAC training curve](docs/assets/training_sac.png) |
+
+![DQN reaching rollout](docs/assets/arm_reaching.png)
+
+Three panels (start / midpoint / final) of a held-out episode (`seed=100009`)
+executed by the trained DQN checkpoint. Final end-effector error is `0.698`
+legacy units and the episode succeeds; the dashed line is the complete recorded
+end-effector path.
+
+![DQN replay](docs/assets/dqn_replay.gif)
+
+Classical smoke benchmark across 16 scenario/controller cells (20 episodes
+each):
+
+![Benchmark success](docs/assets/benchmark_success.png)
+
 ---
 
 ## What is implemented
@@ -231,6 +256,35 @@ units.
 Generated plots: `results/smoke-default/benchmark_success.png` and
 `results/smoke-default/benchmark_errors.png`.
 
+### GPU-trained RL policies (single seed — still not a final benchmark)
+
+Trained on an NVIDIA RTX 4050 Laptop GPU (`torch 2.11.0+cu128`,
+Stable-Baselines3 2.9.0) with `--device cuda`.
+
+| policy | budget | greedy training-time eval | held-out eval (`base_eval_seed=100000`) |
+|:--|:--|--:|--:|
+| Dueling Double DQN | 600 episodes / 42,357 env steps / 332 s | 1.00 | **0.70 (7/10)** |
+| SAC | 60,000 timesteps / 2,174 s | — (no intermediate eval) | **0.40 (4/10)** |
+
+The DQN checkpoint was re-evaluated through the standard interface on a separate
+10-episode held-out suite:
+
+```bash
+python -m armlab evaluate --scenario static_reaching --controller dqn \
+  --checkpoint results/gpu/dqn/train_dqn_seed7/latest.best \
+  --episodes 10 --seed 7 --output-dir results/gpu/eval-dqn --final
+```
+
+SAC was evaluated deterministically after training on the same held-out seed
+block: **0.40 (4/10)**, mean final error `1.311`. Its rolling reward rose from
+about `-321` to `+70`, so it is learning but is clearly less sample-efficient
+than the discrete DQN here.
+
+The gap between the DQN's 1.00 training-time greedy evaluation and its 0.70
+held-out suite is reported rather than hidden. One seed per algorithm is **not**
+the planned final benchmark (≥5 seeds × ≥100 episodes) and no convergence claim
+is made.
+
 ### Failure case worth showing
 
 The Jacobian/DLS controller succeeds only half the time on static and
@@ -241,10 +295,11 @@ approximate obstacle penetrations. This is reported rather than tuned away; see
 [`docs/experiments.md`](docs/experiments.md) for the analysis and possible
 fixes (limit-avoidance/null-space term, stall re-seeding).
 
-RL smoke runs (2,000-step budgets) reached 0.00 eval success — expected for
-undertrained agents. They are reported to prove the train → checkpoint → load →
-evaluate path, not to claim learning. Full details in
-[`docs/experiments.md`](docs/experiments.md).
+RL smoke runs (2,000-step budgets, CPU) reached 0.00 eval success — expected for
+undertrained agents. They are retained to prove the train → checkpoint → load →
+evaluate path, not to claim learning. The larger GPU-trained runs above are
+separate; the DQN checkpoint reaches **0.70** on its held-out suite. Full
+details in [`docs/experiments.md`](docs/experiments.md).
 
 ---
 

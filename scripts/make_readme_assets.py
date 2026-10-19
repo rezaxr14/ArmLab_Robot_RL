@@ -104,7 +104,7 @@ def plot_scene(run_dir: Path, out: Path, episode: int = 0) -> Path:
     picks = [0, n // 2, n - 1]
 
     plt = _plt()
-    fig = plt.figure(figsize=(13, 4.6))
+    fig = plt.figure(figsize=(13, 5.0))
     all_pts = np.vstack([poses.reshape(-1, 3), target[None, :] if target is not None else ee])
     lo = all_pts.min(axis=0)
     hi = all_pts.max(axis=0)
@@ -143,7 +143,7 @@ def plot_scene(run_dir: Path, out: Path, episode: int = 0) -> Path:
     handles, labels = fig.axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=4, frameon=False)
     fig.suptitle("Measured reaching rollout: arm, end-effector path and target")
-    fig.tight_layout(rect=(0, 0.06, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.10, 1, 0.95))
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
@@ -165,6 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dqn-run", type=Path, default=None)
     parser.add_argument("--sac-metrics", type=Path, default=None)
     parser.add_argument("--trajectory-run", type=Path, default=None)
+    parser.add_argument(
+        "--episode",
+        type=int,
+        default=0,
+        help="zero-based trajectory index inside --trajectory-run (sorted by seed)",
+    )
     parser.add_argument("--benchmark-root", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=Path("docs/assets"))
     args = parser.parse_args(argv)
@@ -178,7 +184,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.sac_metrics:
         produced.append(plot_sac_curve(args.sac_metrics, args.out / "training_sac.png"))
     if args.trajectory_run:
-        produced.append(plot_scene(args.trajectory_run, args.out / "arm_reaching.png"))
+        produced.append(
+            plot_scene(args.trajectory_run, args.out / "arm_reaching.png", args.episode)
+        )
     if args.benchmark_root:
         path = plot_benchmark(args.benchmark_root, args.out / "benchmark_success.png")
         if path:
