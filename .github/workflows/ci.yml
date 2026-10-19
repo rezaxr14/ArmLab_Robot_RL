@@ -63,12 +63,6 @@ jobs:
           print("episode ok, return =", total)
           PY
 
-      - name: DQN tiny training + checkpoint smoke test
-        run: |
-          python -m armlab train dqn --episodes 2 --max-steps 120 \
-            --eval-every 1 --eval-seed 11 --seed 11 \
-            --output-dir "$RUNNER_TEMP/dqn-smoke"
-
       - name: Report/replay artifact smoke test
         run: |
           python -m armlab evaluate --scenario static_reaching --controller ik \
@@ -81,6 +75,31 @@ jobs:
           )
           python -m armlab report --run "$RUN_DIR"
           python -m armlab replay --run "$RUN_DIR" --episode 0
+
+  rl:
+    name: rl extra (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install base + RL + dev
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[rl,dev]"
+
+      - name: RL tests
+        run: python -m pytest tests/test_rl_agent.py tests/test_rl_training.py tests/test_sac.py -q
+
+      - name: DQN tiny training + checkpoint smoke test
+        run: |
+          python -m armlab train dqn --episodes 2 --max-steps 120 \
+            --device cpu --eval-every 1 --eval-seed 11 --seed 11 \
+            --output-dir "$RUNNER_TEMP/dqn-smoke"
 
   physics:
     name: physics extra (Python 3.12)
