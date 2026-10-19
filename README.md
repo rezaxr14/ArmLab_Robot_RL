@@ -172,8 +172,8 @@ Every environment, controller, planner, metric and visualizer uses the same
 ## Installation
 
 ```bash
-git clone https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git
-cd 3D-Robot-Control-RL-Analytical
+git clone https://github.com/rezaxr14/ArmLab_Robot_RL.git
+cd ArmLab_Robot_RL
 python -m venv .venv
 
 # Linux/macOS
