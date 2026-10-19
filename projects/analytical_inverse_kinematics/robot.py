@@ -91,7 +91,9 @@ class Robot:
         cos_theta3 = (D**2 - self.l2**2 - self.l3**2) / (2 * self.l2 * self.l3)
         cos_theta3 = np.clip(cos_theta3, -1.0, 1.0)
         
-        gamma = np.arctan2(z_prime, r)
+        # gamma is the target direction in the vertical plane, measured from
+        # the +z axis exactly like theta2 in forward_kinematics().
+        gamma = np.arctan2(r, z_prime)
         cos_alpha = (D**2 + self.l2**2 - self.l3**2) / (2 * D * self.l2)
         cos_alpha = np.clip(cos_alpha, -1.0, 1.0)
         alpha = np.arccos(cos_alpha)

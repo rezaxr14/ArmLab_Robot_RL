@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "armlab"
 version = "0.2.0"
-description = "ArmLab: a reproducible robotics control, simulation, and RL benchmark for a 3-link spatial arm."
+description = "ArmLab RL: a reproducible 3D robot-arm benchmark for analytical IK, classical control, and reinforcement learning (Dueling Double DQN / SAC)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -46,7 +46,7 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = ["Analytical_Inverse_Kinematics", "RL_Double_Dueling_DQN", "docs"]
+exclude = ["projects", "docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]

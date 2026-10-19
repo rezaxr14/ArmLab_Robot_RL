@@ -54,10 +54,11 @@ src/armlab/
     └── visualizer_matplotlib.py
 ```
 
-The original top-level folders (`Analytical_Inverse_Kinematics/`,
-`RL_Double_Dueling_DQN/`) are kept as the historical, runnable demo and as the
-reference for the documented IK bug. New code never duplicates their logic:
-`armlab.legacy.Robot` delegates to `RobotKinematics`.
+The original demos are grouped under `projects/`
+(`analytical_inverse_kinematics/`, `rl_double_dueling_dqn/`) and kept runnable
+for provenance. New code never duplicates their logic: `armlab.legacy.Robot`
+delegates to `RobotKinematics`, and the original IK is verified by
+`tests/test_legacy.py`.
 
 ## Layering
 

@@ -1,19 +1,21 @@
-# ArmLab
+# ArmLab RL — 3D Robot Arm Control with Analytical IK and Reinforcement Learning
 
-**A reproducible 3-link robot-arm benchmark that puts classical control
-(analytical IK, PD, damped-least-squares Jacobian, MPC, RRT) and learned
-policies (Dueling Double DQN, SAC) on the same task, robot model and evaluation
-schema — in kinematics and, optionally, MuJoCo physics.**
+**A reproducible RL and control suite for a 3-link robot arm in 3D. It puts a
+precise analytical inverse-kinematics (IK) solver, classical controllers (PD,
+damped-least-squares Jacobian, MPC, RRT) and modern RL agents (Dueling Double
+DQN and SAC) on the same task, robot model and evaluation schema — in
+kinematics and, optionally, MuJoCo physics.**
 
-ArmLab grew out of a 3D robot-arm demo that could solve inverse kinematics and
-train a DQN. The engineering goal here is narrower and more useful: make the
-math correct and tested, make training reproducible and checkpointed, and make
-every controller comparable through one measured, versioned results format.
+The project grew out of two original 3D robot-arm demos: an analytical IK
+solver and a Dueling Double DQN agent. The engineering goal here is narrower
+and more useful: keep the math correct and tested, make RL training
+reproducible and checkpointed, and make every controller comparable through one
+measured, versioned results format.
 
-> **Honesty note:** the reported table below is a **20-episode smoke suite** on
-> the kinematic task, not a converged multi-seed benchmark. RL smoke runs are
-> labelled as such and are not evidence of convergence. See
-> [`docs/experiments.md`](docs/experiments.md) for protocol and failure
+> **Scope:** the classical comparison is a **20-episode smoke suite** and the
+> GPU RL runs are **single-seed**; neither is a converged multi-seed benchmark.
+> Every number below comes from a saved run directory. See
+> [`docs/experiments.md`](docs/experiments.md) for the protocol and failure
 > analysis.
 
 ---
@@ -23,15 +25,41 @@ every controller comparable through one measured, versioned results format.
 The original demonstration still runs and shows analytical IK tracking a moving
 target and a trained DQN reaching goals:
 
-[![Robot arm demo](Screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "Robot arm demo")
+[![Robot arm demo](projects/screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "Robot arm demo")
 
 | Analytical IK tracking | RL reaching |
 |:--:|:--:|
-| ![IK tracking](Screenshots/inv_kin_Figure_2.png) | ![RL success](Screenshots/RL_Figure_1.png) |
-| ![IK tracking pose](Screenshots/inv_kin_Figure_1.png) | ![RL target](Screenshots/RL_Figure_4.png) |
+| ![IK tracking](projects/screenshots/inv_kin_Figure_2.png) | ![RL success](projects/screenshots/RL_Figure_1.png) |
+| ![IK tracking pose](projects/screenshots/inv_kin_Figure_1.png) | ![RL target](projects/screenshots/RL_Figure_4.png) |
 
 Reproducible headless runs also generate their own plots and trajectory
 artifacts (see the results section).
+
+## Repository layout
+
+The repository is deliberately split into three sections:
+
+| section | location | what it is |
+|:--|:--|:--|
+| **1. Analytical inverse kinematics** | [`projects/analytical_inverse_kinematics/`](projects/analytical_inverse_kinematics/) | the original 3-link analytical-IK demo, kept runnable and verified to round-trip reachable targets |
+| **2. RL Double Dueling DQN** | [`projects/rl_double_dueling_dqn/`](projects/rl_double_dueling_dqn/) | the original from-scratch DQN demo, training script and saved model |
+| **3. ArmLab benchmark** | [`src/armlab/`](src/armlab/) | the integrated, tested package: correct kinematics, classical controllers, DQN/SAC, physics, evaluation and artifacts |
+
+The two historical demos stay runnable for provenance and are covered by
+regression tests. Their corrected APIs live in
+[`armlab.legacy`](src/armlab/legacy/), so new code can use them without copying
+the old scripts. See [`projects/README.md`](projects/README.md) for exact run
+commands.
+
+```text
+projects/
+  analytical_inverse_kinematics/   # section 1
+  rl_double_dueling_dqn/           # section 2
+  screenshots/                     # original demo media
+  README.md
+src/armlab/                        # section 3 (integrated benchmark)
+configs/  tests/  docs/  scripts/  # support for section 3
+```
 
 ### Training and rollout figures (generated from real run artifacts)
 
@@ -95,10 +123,14 @@ each):
 ### Not implemented (do not assume it exists)
 
 - A **final** multi-seed benchmark (≥5 training seeds × ≥100 held-out episodes).
-  The current results are explicitly a smoke suite.
+  The current results are a 20-episode classical smoke suite plus single-seed
+  GPU RL runs.
 - Robustness scenarios beyond held-out targets: `perturbed_dynamics`,
   `sensor_noise_delay`, `unseen_targets` are not wired into the scenario
   registry yet.
+- **Complete obstacle-aware control.** The DLS controller has an optional
+  end-effector repulsion and RRT plans against obstacles, but IK/PD/MPC and the
+  RL policies do not observe obstacles, and RRT is not in the default suite.
 - Six-DOF/UR5e models, grippers, pick-and-place, ROS 2 or hardware control, and
   any sim-to-real claim.
 - Vectorized/multi-process training and hosted experiment tracking.
@@ -290,10 +322,16 @@ is made.
 The Jacobian/DLS controller succeeds only half the time on static and
 collision-avoidance seeds. It is a local method: a joint can reach a limit while
 the Cartesian error still points through that limit, so the projected update
-stalls just outside tolerance. The collision-avoidance run also records 3
-approximate obstacle penetrations. This is reported rather than tuned away; see
-[`docs/experiments.md`](docs/experiments.md) for the analysis and possible
-fixes (limit-avoidance/null-space term, stall re-seeding).
+stalls just outside tolerance. The collision-avoidance run still records 3
+approximate obstacle penetrations.
+
+**Obstacle avoidance is partial, not solved.** The `collision_avoidance`
+scenario places two spheres and the metrics count capsule penetrations. The DLS
+controller's optional end-effector repulsion is enabled, and RRT plans against
+the obstacles, but IK/PD/MPC and the RL policies do not observe the obstacles.
+RRT is available but is not part of the default smoke suite. This is reported
+rather than tuned away; see [`docs/experiments.md`](docs/experiments.md) for the
+analysis and possible fixes (limit-avoidance/null-space term, stall re-seeding).
 
 RL smoke runs (2,000-step budgets, CPU) reached 0.00 eval success — expected for
 undertrained agents. They are retained to prove the train → checkpoint → load →
@@ -337,15 +375,14 @@ A real benchmark requires editing `configs/benchmark/default.yaml`
 ## Project structure
 
 ```text
-src/armlab/           # package: kinematics, controllers, envs, physics,
-                      # planning, rl, evaluation, visualization, cli, dashboard
-configs/              # validated robot/env/train/benchmark YAML
-tests/                # deterministic unit + integration + regression tests
-docs/                 # architecture, math conventions, experiments,
-                      # troubleshooting, baseline audit
-Analytical_Inverse_Kinematics/   # original demo + historical IK bug reference
-RL_Double_Dueling_DQN/           # original demo
-Screenshots/          # README media
+src/armlab/                  # section 3: integrated benchmark package
+configs/                     # validated robot/env/train/benchmark YAML
+tests/                       # deterministic unit + integration + regression tests
+docs/                        # architecture, conventions, experiments, troubleshooting
+docs/assets/                 # generated README figures
+scripts/                     # reproducibility helpers (README asset generation)
+projects/                    # sections 1-2: original demos + their screenshots
+.github/workflows/           # CI
 ```
 
 ---

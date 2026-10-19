@@ -73,6 +73,12 @@ Notes on interpretation:
   move slowly (amplitude ~2, frequency ~0.4) relative to the control step.
 - **Collisions** are approximate kinematic capsule checks
   (`armlab.planning.collision`), not MuJoCo contacts.
+- **Obstacle avoidance is partial.** `collision_avoidance` places two spheres
+  and measures capsule penetrations. The DLS controller's optional end-effector
+  repulsion is enabled in `make_policy`, and RRT plans against the obstacles,
+  but IK/PD/MPC and the RL policies do not observe obstacles. The default smoke
+  suite does not include RRT, so this scenario is a collision-aware benchmark,
+  not a solved obstacle-avoidance benchmark.
 
 Plots generated from these artifacts:
 

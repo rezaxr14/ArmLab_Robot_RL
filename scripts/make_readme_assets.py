@@ -103,8 +103,10 @@ def plot_scene(run_dir: Path, out: Path, episode: int = 0) -> Path:
     n = len(q)
     picks = [0, n // 2, n - 1]
 
+    from matplotlib.ticker import FormatStrFormatter, MaxNLocator
+
     plt = _plt()
-    fig = plt.figure(figsize=(13, 5.0))
+    fig = plt.figure(figsize=(15.5, 5.4))
     all_pts = np.vstack([poses.reshape(-1, 3), target[None, :] if target is not None else ee])
     lo = all_pts.min(axis=0)
     hi = all_pts.max(axis=0)
@@ -140,10 +142,23 @@ def plot_scene(run_dir: Path, out: Path, episode: int = 0) -> Path:
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
+        # Cap the tick count and shorten labels: three dense 3D axes otherwise
+        # collide at README scale.
+        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+            axis.set_major_locator(MaxNLocator(nbins=4))
+            axis.set_major_formatter(FormatStrFormatter("%.0f"))
+        ax.tick_params(axis="both", which="major", labelsize=8, pad=1)
     handles, labels = fig.axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=4, frameon=False)
-    fig.suptitle("Measured reaching rollout: arm, end-effector path and target")
-    fig.tight_layout(rect=(0, 0.10, 1, 0.95))
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        ncol=4,
+        frameon=False,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    fig.suptitle("Measured reaching rollout: arm, end-effector path and target", y=0.98)
+    fig.subplots_adjust(left=0.03, right=0.98, bottom=0.13, top=0.86, wspace=0.22)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

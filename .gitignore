@@ -24,7 +24,7 @@ results/
 *.pth
 *.pt
 *.zip
-!RL_Double_Dueling_DQN/qnetwork.pth
+!projects/rl_double_dueling_dqn/qnetwork.pth
 *.mp4
 *.gif
 !docs/assets/*.gif

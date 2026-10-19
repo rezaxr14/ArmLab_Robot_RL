@@ -42,14 +42,13 @@ Command used: `python -m armlab doctor` (after the CLI existed) plus manual
 These were reproduced against the checked-out code, with a test or a command,
 before being addressed:
 
-1. **Analytical IK angle-convention bug (confirmed).**
-   `Analytical_Inverse_Kinematics/robot.py` computes the in-plane angle as
-   `atan2(z', r_xy)`, but its own FK measures `theta2` from the vertical, for
-   which the correct angle is `atan2(r_xy, z')`. The round trip
-   `FK(IK(FK(q)))` misses the target by `> 1.0` length units.
-   Reproduced by `tests/test_legacy.py::test_legacy_ik_round_trip_is_broken`.
-   The file is kept as-is (the bug is part of the story); the corrected solver
-   lives in `armlab.kinematics` and is exposed via `armlab.legacy.Robot`.
+1. **Analytical IK angle-convention bug (resolved).**
+   The original demo computed the in-plane angle as `atan2(z', r_xy)`, but its
+   own FK measures `theta2` from the vertical, for which the correct angle is
+   `atan2(r_xy, z')`. The round trip `FK(IK(FK(q)))` missed the target by
+   `> 1.0` length units. The demo now uses the correct convention and
+   `tests/test_legacy.py::TestIKRoundTrip` verifies a sub-`1e-6` residual for
+   both the original demo and `armlab.legacy.Robot`.
 
 2. **IK degenerate / boundary handling gaps.**
    The legacy solver divided by the target distance without guarding a
