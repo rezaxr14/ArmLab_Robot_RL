@@ -1,154 +1,213 @@
-"""Tests for the Gymnasium kinematic environments and wrappers."""
+"""Simulator tests (need `mujoco` and the Menagerie assets)."""
+
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
-gym = pytest.importorskip("gymnasium")
-from gymnasium.utils.env_checker import check_env
+mujoco = pytest.importorskip("mujoco")
 
-from armlab.config import EnvParams, RewardParams
-from armlab.envs import KinematicReachingEnv, MovingTargetEnv, register_envs
-from armlab.envs.wrappers import ActionRepeat, StackObservations
+from armforge.config import EnvConfig, from_dict  # noqa: E402
+from armforge.env.arm_env import ArmForgeEnv  # noqa: E402
 
 
-class TestKinematicEnv:
-    def test_gymnasium_api_compliance(self):
-        env = KinematicReachingEnv()
-        check_env(env, skip_render_check=True)
+def make(menagerie, **d):
+    d.setdefault("task", {"name": "reach", "horizon": 12})
+    return ArmForgeEnv(from_dict(EnvConfig, d), str(menagerie))
 
-    def test_registration_and_make(self):
-        register_envs()
-        env = gym.make("ArmLabKinematic-v0")
-        obs, info = env.reset(seed=1)
-        assert obs.shape == (9,)
+
+@pytest.fixture(scope="module")
+def reach(menagerie):
+    env = make(menagerie)
+    yield env
+    env.close()
+
+
+def test_model_has_expected_structure(reach):
+    m = reach.model
+    assert m.nu == 7 and m.neq == 3  # 6 arm servos + gripper; 2 connects + 1 joint equality
+    assert m.opt.cone == mujoco.mjtCone.mjCONE_ELLIPTIC
+    assert abs(m.opt.timestep - 0.002) < 1e-12 and reach.substeps == 20
+
+
+def test_friction_values_reach_the_model(menagerie):
+    env = make(menagerie, physics={"table_friction": [0.5, 0.005, 0.0001], "pad_friction": 1.0}, task={"name": "pickplace", "horizon": 5})
+    m, name2id = env.model, mujoco.mj_name2id
+    table = name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "table_top")
+    assert np.allclose(m.geom_friction[table], [0.5, 0.005, 0.0001])
+    pad = name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "rq_right_pad1")
+    assert m.geom_friction[pad][0] == pytest.approx(1.0)
+    env.close()
+
+
+def test_reset_is_deterministic_and_contact_free(reach):
+    a = reach.reset(seed=3)
+    b = reach.reset(seed=3)
+    assert np.array_equal(a["observation"], b["observation"]) and np.array_equal(a["desired_goal"], b["desired_goal"])
+    assert not np.array_equal(a["desired_goal"], reach.reset(seed=4)["desired_goal"])
+
+
+def test_step_contract(reach):
+    obs = reach.reset(seed=0)
+    assert obs["observation"].shape == (reach.obs_dim,) and obs["achieved_goal"].shape == (3,)
+    done, n = False, 0
+    while not done:
+        obs, r, done, info = reach.step(np.zeros(3))
+        n += 1
+        assert r in (-1.0, 0.0) and np.all(np.isfinite(obs["observation"]))
+    assert n == reach.horizon
+
+
+def test_cartesian_command_moves_the_hand_the_right_way(reach):
+    reach.reset(seed=1)
+    p0 = reach.ee_pos
+    for _ in range(4):
+        reach.step(np.array([1.0, 0.0, 0.0]))
+    d = reach.ee_pos - p0
+    assert d[0] > 0.04, f"hand barely moved along +x: {d}"  # 4 steps x 2.5 cm commanded
+    assert abs(d[1]) < 0.02 and abs(d[2]) < 0.02, f"drifted off-axis: {d}"
+
+
+def test_tool_stays_pointing_down(reach):
+    reach.reset(seed=2)
+    rng = np.random.default_rng(0)
+    for _ in range(10):
+        reach.step(rng.uniform(-1, 1, 3))
+    R = reach.data.site_xmat[reach.site_id].reshape(3, 3)
+    assert R[2, 2] < -0.98, "tool approach axis drifted away from straight down"
+
+
+def test_reach_success_when_goal_is_the_hand(reach):
+    reach.reset(seed=5)
+    reach.goal = reach.ee_pos.copy()
+    obs, r, done, info = reach.step(np.zeros(3))
+    assert info["is_success"] and r == 0.0
+
+
+def test_compute_reward_matches_step_and_is_vectorised(reach):
+    ag = np.array([[0, 0, 0], [0, 0, 0.5]], np.float32)
+    g = np.zeros((2, 3), np.float32)
+    assert np.array_equal(reach.compute_reward(ag, g), [0.0, -1.0])
+
+
+def test_cube_rests_on_table_and_pads_not_touching(menagerie):
+    env = make(menagerie, task={"name": "pickplace", "horizon": 10})
+    obs = env.reset(seed=0)
+    for _ in range(10):
+        env.step(np.array([0, 0, 0, -1.0]))
+    cube = env.object_pos("cube")
+    assert abs(cube[2] - env.layout.object_half_size) < 2e-3, cube  # resting, not sunk or floating
+    assert np.linalg.norm(env.object_linvel("cube")) < 0.02
+    assert not env.pad_contacts().any()
+    env.close()
+
+
+def test_push_height_is_locked_and_never_scrapes_the_table(menagerie):
+    env = make(menagerie, task={"name": "push", "horizon": 15, "push_height": 0.02})
+    env.reset(seed=0)
+    rng = np.random.default_rng(1)
+    for _ in range(15):
+        env.step(rng.uniform(-1, 1, 2))
+        assert abs(env.ee_pos[2] - 0.02) < 0.012
+    # no robot geom other than (maybe) the cube touches the table
+    tbl = env.table_geom
+    d = env.data
+    for i in range(d.ncon):
+        c = d.contact[i]
+        if tbl in (c.geom1, c.geom2):
+            other = c.geom2 if c.geom1 == tbl else c.geom1
+            assert mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, other) in ("cube_geom", None) or env.model.geom_bodyid[other] == env.cube_body
+    env.close()
+
+
+def test_gripper_closes_and_opens(menagerie):
+    env = make(menagerie, task={"name": "pickplace", "horizon": 30})
+    env.reset(seed=0)
+    for _ in range(8):
+        env.step(np.array([0, 0, 0, 1.0]))
+    assert env.gripper_opening() > 0.8
+    for _ in range(8):
+        env.step(np.array([0, 0, 0, -1.0]))
+    assert env.gripper_opening() < 0.2
+    env.close()
+
+
+def test_domain_randomisation_changes_then_restores_physics(menagerie):
+    env = make(menagerie, physics={"randomize": {"enabled": True}})
+    nominal = env._nom["geom_friction"].copy()
+    env.reset(seed=0)
+    assert not np.allclose(env.model.geom_friction, nominal)
+    env.cfg.physics.randomize.enabled = False
+    env.reset(seed=0)
+    assert np.allclose(env.model.geom_friction, nominal)
+    env.close()
+
+
+def test_friction_actually_changes_a_slide(menagerie):
+    """Physics sanity: a cube given the same push slides farther on a slippery table."""
+
+    def slide(mu):
+        env = make(menagerie, physics={"table_friction": [mu, 0.005, 0.0001], "object_friction": [mu, 0.005, 0.0001]}, task={"name": "push", "horizon": 5})
+        env.reset(seed=0)
+        env.set_free_body("cube", [0.5, 0.0, 0.02], [1, 0, 0, 0])
+        env.data.qvel[env._free["cube"][1] : env._free["cube"][1] + 3] = [0.8, 0, 0]
+        x0 = env.object_pos("cube")[0]
+        for _ in range(200):
+            mujoco.mj_step(env.model, env.data)
+        x1 = env.object_pos("cube")[0]
         env.close()
+        return x1 - x0
 
-    def test_reset_determinism(self):
-        env = KinematicReachingEnv()
-        obs1, _ = env.reset(seed=123)
-        obs2, _ = env.reset(seed=123)
-        np.testing.assert_allclose(obs1, obs2)
-        # Different seeds give different targets with overwhelming likelihood.
-        obs3, _ = env.reset(seed=456)
-        assert not np.allclose(obs1[6:9], obs3[6:9])
-
-    def test_step_determinism(self):
-        def rollout(seed):
-            env = KinematicReachingEnv()
-            env.reset(seed=7)
-            traj = []
-            for a in [0, 2, 4, 1, 3, 5, 0]:
-                obs, r, term, trunc, info = env.step(a)
-                traj.append((obs.copy(), r, term, trunc))
-            return traj
-
-        t1, t2 = rollout(7), rollout(7)
-        for (o1, r1, _, _), (o2, r2, _, _) in zip(t1, t2):
-            np.testing.assert_allclose(o1, o2)
-            assert r1 == r2
-
-    def test_discrete_action_semantics(self):
-        env = KinematicReachingEnv()
-        env.reset(seed=0)
-        env.unwrapped.q = np.zeros(3)
-        env.step(0)  # joint 0, +
-        assert env.unwrapped.q[0] == pytest.approx(np.deg2rad(5))
-        env.step(1)  # joint 0, -
-        assert env.unwrapped.q[0] == pytest.approx(0.0)
-
-    def test_joint_limits_enforced(self):
-        env = KinematicReachingEnv()
-        env.reset(seed=0)
-        env.unwrapped.q = np.full(3, np.pi)
-        env.step(0)
-        assert env.unwrapped.q[0] <= np.pi
-
-    def test_success_terminates_with_bonus(self):
-        rp = RewardParams(success_threshold=0.5, success_bonus=100.0)
-        env = KinematicReachingEnv(
-            env_params=EnvParams(control_mode="continuous"), reward_params=rp
-        )
-        env.reset(seed=0)
-        # Place the arm exactly at the IK solution, then command zero motion.
-        target = env.unwrapped.target.copy()
-        res = env.unwrapped.kin.inverse_kinematics(target)
-        env.unwrapped.q = res.solution
-        obs, r, term, trunc, info = env.step(np.zeros(3))
-        assert term is True
-        assert r >= 100.0 - 1.0  # bonus minus tiny distance/time penalties
-
-    def test_max_episode_steps_truncation(self):
-        env = KinematicReachingEnv(env_params=EnvParams(max_episode_steps=5))
-        env.reset(seed=0)
-        term = trunc = False
-        for _ in range(5):
-            _, _, term, trunc, _ = env.step(0)
-        assert trunc and not term
-
-    def test_continuous_control_mode(self):
-        env = KinematicReachingEnv(env_params=EnvParams(control_mode="continuous"))
-        assert isinstance(env.action_space, gym.spaces.Box)
-        check_env(env, skip_render_check=True)
-        env.reset(seed=3)
-        obs, r, term, trunc, info = env.step(np.array([0.5, -0.5, 0.0]))
-        assert obs.shape == (9,)
-
-    def test_relative_observation(self):
-        env = KinematicReachingEnv(env_params=EnvParams(observation_kind="relative"))
-        obs, _ = env.reset(seed=2)
-        assert obs.shape == (6,)
-
-    def test_action_repeat_param(self):
-        env = KinematicReachingEnv(env_params=EnvParams(action_repeat=3))
-        env.reset(seed=0)
-        env.unwrapped.q = np.zeros(3)
-        env.step(0)
-        assert env.unwrapped.q[0] == pytest.approx(3 * np.deg2rad(5))
-
-    def test_info_fields(self):
-        env = KinematicReachingEnv()
-        _, info = env.reset(seed=5)
-        for key in ("distance", "ee_position", "target_position", "q"):
-            assert key in info
+    assert slide(0.15) > slide(0.9) + 0.05
 
 
-class TestMovingTargetEnv:
-    def test_determinism(self):
-        def rollout(seed):
-            env = MovingTargetEnv()
-            env.reset(seed=seed)
-            return [env.step(a)[0].copy() for a in [0, 2, 4]]
-
-        assert all(np.allclose(a, b) for a, b in zip(rollout(11), rollout(11)))
-
-    def test_target_moves(self):
-        env = MovingTargetEnv()
-        env.reset(seed=1)
-        t0 = env.unwrapped.target.copy()
-        for _ in range(10):
-            env.step(0)
-        assert not np.allclose(t0, env.unwrapped.target)
+def test_distractors_and_tray_scene_runs(menagerie):
+    env = make(menagerie, scene={"tray": True, "distractors": 2}, task={"name": "pickplace", "horizon": 6})
+    obs = env.reset(seed=0)
+    assert obs["observation"].shape[0] == env.obs_dim
+    for _ in range(6):
+        env.step(np.zeros(4))
+    env.close()
 
 
-class TestWrappers:
-    def test_action_repeat(self):
-        env = ActionRepeat(KinematicReachingEnv(), 4)
-        env.reset(seed=0)
-        env.unwrapped.q = np.zeros(3)
-        env.step(0)
-        assert env.unwrapped.q[0] == pytest.approx(4 * np.deg2rad(5))
+def test_rendering(menagerie):
+    pytest.importorskip("PIL")
+    env = make(menagerie)
+    env.reset(seed=0)
+    try:
+        img = env.render("front", 160, 120)
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"no OpenGL backend: {exc}")
+    assert img.shape == (120, 160, 3) and img.std() > 5
+    env.close()
 
-    def test_action_repeat_invalid(self):
-        with pytest.raises(ValueError):
-            ActionRepeat(KinematicReachingEnv(), 0)
 
-    def test_stack_observations(self):
-        env = StackObservations(KinematicReachingEnv(), 3)
-        obs, _ = env.reset(seed=0)
-        assert obs.shape == (3, 9)
-        obs, _, _, _, _ = env.step(0)
-        assert obs.shape == (3, 9)
-        # After reset all stacked rows are identical.
-        obs, _ = env.reset(seed=0)
-        np.testing.assert_allclose(obs[0], obs[1])
-        np.testing.assert_allclose(obs[1], obs[2])
+@pytest.mark.parametrize("task,min_success", [("reach", 0.9), ("push", 0.5), ("pickplace", 0.5)])
+def test_scripted_expert_solves_the_task(menagerie, task, min_success):
+    """The expert is the reference the learners are judged against; it must work."""
+    from armforge.rl.expert import rollout_expert
+
+    horizon = {"reach": 50, "push": 60, "pickplace": 80}[task]
+    env = make(menagerie, task={"name": task, "horizon": horizon, "success_threshold": 0.03 if task != "push" else 0.04})
+    wins = sum(rollout_expert(env, seed=1_000_000 + i)["success"] for i in range(10))
+    env.close()
+    assert wins / 10 >= min_success, f"expert only solved {wins}/10 {task} episodes"
+
+
+def test_arm_holds_position_without_drifting(menagerie):
+    """Regression guard for the gravity-sag drift: zero actions must keep the hand where it is."""
+    env = make(menagerie, task={"name": "reach", "horizon": 40})
+    env.reset(seed=0)
+    p0 = env.ee_pos
+    for _ in range(30):
+        env.step(np.zeros(3))
+    assert np.linalg.norm(env.ee_pos - p0) < 0.01, "hand drifted while commanded to stay still"
+    env.close()
+
+
+def test_reach_parks_the_cube_out_of_the_way(menagerie):
+    env = make(menagerie, task={"name": "reach", "horizon": 5})
+    env.reset(seed=0)
+    cube = env.object_pos("cube")
+    assert np.linalg.norm(cube[:2] - np.array(env.layout.workspace_center)) > 0.4
+    env.close()

@@ -1,0 +1,17 @@
+# Reach a 3D goal with the gripper closed. Sparse reward, HER, curriculum. No objects, no demos.
+name: reach
+out_dir: runs
+env:
+  seed: 0
+  task: {name: reach, horizon: 50, success_threshold: 0.03}
+train:
+  total_steps: 300000
+  num_envs: 4
+  start_steps: 4000
+  warmup_updates_after: 2000
+  buffer_episodes: 8000
+  eval_every: 10000
+  eval_episodes: 20
+  log_every: 2500
+  checkpoint_every: 50000
+  milestones: [0.0, 0.02, 0.1, 0.35, 1.0]

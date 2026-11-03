@@ -1,0 +1,28 @@
+# Seconds-scale end-to-end check: tiny networks, a few thousand steps. NOT expected to learn anything.
+name: smoke
+out_dir: runs
+env:
+  seed: 0
+  task: {name: reach, horizon: 20}
+algo:
+  critic: tqc
+  hidden: [64, 64]
+  critic_ensemble: 2
+  n_quantiles: 5
+  top_quantiles_to_drop: 1
+  batch_size: 64
+  updates_per_step: 0.25
+train:
+  total_steps: 4000
+  num_envs: 2
+  start_steps: 400
+  warmup_updates_after: 400
+  buffer_episodes: 400
+  eval_every: 2000
+  eval_episodes: 3
+  log_every: 1000
+  checkpoint_every: 2000
+  milestones: [0.0, 0.5, 1.0]
+  device: cpu
+  vec_backend: sync
+  curriculum: {enabled: true, window_episodes: 20}

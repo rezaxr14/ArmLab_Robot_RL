@@ -1,0 +1,15 @@
+# Push a 40 mm cube to a goal with the closed gripper 2 cm above the table (friction-driven).
+name: push
+out_dir: runs
+env:
+  seed: 0
+  task: {name: push, horizon: 60, success_threshold: 0.04, push_height: 0.02}
+  physics:
+    randomize: {enabled: true}
+train:
+  total_steps: 1500000
+  num_envs: 4
+  buffer_episodes: 26000
+  eval_every: 25000
+  milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
+  demos: {episodes: 150, bc_steps: 1500}

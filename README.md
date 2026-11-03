@@ -1,3 +1,137 @@
+# ArmForge: UR5e + Robotiq 2F-85 manipulation in native MuJoCo, learned with TQC-SAC + HER
+
+**A real 6-DoF robot arm (Universal Robots UR5e from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)) with a real two-finger gripper (Robotiq 2F-85), simulated in a custom MuJoCo environment with friction cones, joint damping, force-limited position servos and a 4-bar gripper linkage - and a from-scratch PyTorch RL stack that learns reaching, pushing and pick-and-place from sparse rewards.** No Gymnasium, no toy kinematics: contacts and actuator limits are in the loop.
+
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/notebooks/armforge_control_panel.ipynb)
+
+The whole project is driven from one notebook - [`notebooks/armforge_control_panel.ipynb`](notebooks/armforge_control_panel.ipynb): configure, inspect the scene, train, monitor, evaluate, render the *failing -> learning -> solved* media, and regenerate this README.
+
+## Contents
+
+1. [Results](#results)  2. [The robot and the physics](#the-robot-and-the-physics)  3. [How it learns](#how-it-learns)  4. [Run it](#run-it)  5. [Repository layout](#repository-layout)  6. [Limitations](#limitations)  7. [Licence](#license-and-third-party-assets)  8. [Legacy project](#legacy-armlab-rl-original-project)
+
+## Results
+
+> **No training run has been published in this checkout yet.** The sections below fill in automatically - with real GIFs of early failures, mid-training attempts and the final policy, learning curves and success tables - when you run the notebook's *Publish* cell (or `armforge publish`). Nothing here is a mock-up.
+
+### Reach
+
+Move the Robotiq pinch point to a random 3D goal in the air. The warm-up task: it proves the controller, the contact-free dynamics and the learning stack work before objects are involved.
+
+> *No published run for `reach` yet - run the notebook's **Publish** cell to generate the media here.*
+
+### Push
+
+Slide a free 40 mm cube to a goal on the table with the **closed** gripper held 2 cm above the surface. The cube is moved only by contact friction, so sliding, torsional and rolling friction decide whether a push goes straight, spins the cube or tips it.
+
+> *No published run for `push` yet - run the notebook's **Publish** cell to generate the media here.*
+
+### Pick and place
+
+Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in the air, or (in the cluttered variant) inside a walled tray among loose distractor cubes. Needs a real grasp: pad friction, finger linkage compliance and grip force all matter.
+
+> *No published run for `pickplace` yet - run the notebook's **Publish** cell to generate the media here.*
+
+## The robot and the physics
+
+*Scene gallery: written to `docs/media/scene_gallery.png` by the notebook's Media cell or `armforge scene`.*
+
+The scene is generated programmatically ([`scene.py`](src/armforge/scene.py)) from the pinned Menagerie models: the UR5e and 2F-85 XML are merged (names, classes, meshes and contact exclusions are namespaced), the gripper is mounted on the flange, and a table, optional walled tray, free cubes, a mocap goal marker and five cameras are added. The meshes are downloaded once into a cache (about 45 MB), not vendored.
+
+| quantity | value |
+|:--|:--|
+| Simulator / integrator | MuJoCo, `implicitfast`, dt = 2 ms, 20 substeps per control step -> 25 Hz policy |
+| Friction cone | `elliptic`, `impratio` 10 (no linearised-pyramid friction artefacts) |
+| Table friction (sliding, torsional, rolling) | (0.5, 0.005, 0.0001) |
+| Cube friction (sliding, torsional, rolling) | (0.6, 0.01, 0.0005); MuJoCo uses the per-component **max** of two touching geoms, so cube-on-table slides at mu = 0.6 |
+| Gripper pad friction | 1 sliding, contact dimension 4 (adds torsional friction), pad priority overrides the cube's values |
+| Cube | 40 mm, 80 g, `condim` 4 |
+| Contact softness | `solref` (0.004, 1), `solimp` (0.95, 0.99, 0.001) |
+| Arm actuators | UR5e position servos from Menagerie: kp 2000 / 500 N m/rad, force limits 150 / 28 N m |
+| Arm joint damping + Coulomb friction | 2 N m s/rad + 0.1 N m `frictionloss` on every joint (added on top of the model's armature) |
+| Gravity | 9.81 m/s^2; the arm and gripper bodies are gravity-compensated (`arm_gravity_comp`, as the UR controller does on hardware) - the cube is not |
+| Gripper | Robotiq 2F-85: 4-bar linkage with equality constraints, spring links, tendon-coupled actuator, 5 N force limit |
+| Domain randomisation (optional) | friction x(0.7, 1.3), cube mass x(0.7, 1.4), joint damping x(0.7, 1.5), actuator kp x(0.85, 1.15) |
+| Episode | 50 control steps = 2 s of simulated time; success radius 3 cm |
+
+**Control.** The policy outputs a Cartesian displacement of the gripper's pinch point (up to 2.5 cm per step) and, for pick-and-place, a gripper command. Damped-least-squares differential IK holds the tool pointing straight down and turns that into joint targets for the arm's *actual* PD servos - so actuator lag, torque saturation, gravity and contact loads act on every motion; nothing is teleported.
+
+**Observation** (goal-conditioned): pinch position and velocity, gripper opening, six joint angles and velocities, and - for object tasks - cube position, cube relative to the hand, orientation, linear/angular velocity, and left/right pad contact flags. The desired and achieved goals are separate vectors, which is what hindsight relabelling needs.
+
+## How it learns
+
+| component | setting |
+|:--|:--|
+| Algorithm | SAC with truncated quantile critics (TQC); `critic: twin` gives classic clipped double-Q SAC for ablations |
+| Critic | 5 critics x 25 quantiles, drop top 2 per critic, LayerNorm = True |
+| Networks | MLP (256, 256, 256) for actor and critics, tanh-Gaussian policy, automatic temperature |
+| Hindsight replay | `future` strategy, relabel probability 0.8, sparse reward {-1, 0} |
+| Bootstrap | gamma 0.98, targets clipped to the reachable return range, no bootstrap cut at the time limit |
+| Optimisation | Adam 0.0003, batch 1024, 0.5 gradient steps per environment step, soft target update tau 0.005 |
+| Curriculum | goals start near the object and spread out only as the rolling success rate rises; **evaluation always uses the full goal range** |
+| Demonstrations (optional) | scripted experts seed the replay buffer and warm-start the actor by behaviour cloning |
+
+```text
+  N parallel MuJoCo workers  --episodes-->  episode buffer (GPU)  --(s, a, goal)-->  TQC-SAC
+        ^                                       |  HER: replace goal with an achieved future state, recompute reward
+        |                                       v
+   policy (actor)  <------------------ gradient updates (UTD ratio)      curriculum widens goals on success
+```
+
+Why these pieces: sparse rewards give no signal until the arm happens to succeed, so **HER** turns every failed episode into a success for the goal it actually reached; **TQC** curbs the value over-estimation that makes sparse-reward off-policy RL diverge; the **curriculum** keeps goals near enough to hit by accident at first; **scripted demonstrations** (optional) give pick-and-place a first successful grasp to learn from.
+
+## Run it
+
+**Colab (GPU):** open the badge above, `Runtime -> Change runtime type -> GPU`, then *Run all* and edit the form fields in the *Configure* cell.
+
+**Local:**
+
+```bash
+git clone https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git && cd 3D-Robot-Control-RL-Analytical
+python -m pip install -e ".[dev]"          # numpy, mujoco, torch, imageio, matplotlib, ...
+armforge doctor                               # checks mujoco, torch/CUDA, rendering and the Menagerie download
+armforge scene --task pickplace --out docs/media/scene_gallery.png
+armforge train --config configs/reach.yaml --name reach-demo
+armforge publish --run runs/reach-demo        # GIFs, stills, curves -> docs/media/ ; then: armforge readme
+```
+
+Config presets live in [`configs/`](configs/) (`reach`, `push`, `pickplace`, `pickplace_clutter`, `smoke`); any field can be overridden with `--set train.total_steps=500000 env.physics.pad_friction=0.8`. Rendering needs an OpenGL backend: EGL by default on headless Linux (`MUJOCO_GL=osmesa` for software rendering).
+
+## Repository layout
+
+```text
+src/armforge/   config, scene (MJCF composition), kinematics oracle, env/ (MuJoCo env, tasks, controller, vec),
+                rl/ (agent, networks, HER buffer, trainer, experts), media, report, readme, cli
+configs/        run presets
+notebooks/      armforge_control_panel.ipynb - the control panel
+tests/          pure-python tests + simulator/torch tests (skipped when those packages are absent)
+docs/media/     generated GIFs, stills and plots shown above
+legacy/         the previous ArmLab project, moved here unchanged (see the section at the bottom)
+```
+
+## Limitations
+
+- Simulation only; no sim-to-real claim. Domain randomisation is provided, but transfer has not been tested.
+- The tool orientation is held fixed (pointing down), so grasps are top-down; no wrist-yaw control, so cubes are spawned within +/-0.35 rad of the gripper axis for pick-and-place.
+- Success is the cube/pinch within a radius of the goal (position only, not orientation).
+- Results are single-seed unless you run more seeds; one seed is not a benchmark.
+- Defaults (1,000,000-step budget, 4 workers) are sized for a single Colab GPU session and have not been tuned.
+
+## License and third-party assets
+
+ArmForge is MIT-licensed (see `pyproject.toml`). The UR5e and Robotiq 2F-85 models come from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie) (both are BSD-style licensed from ROS-Industrial; each model folder carries its own `LICENSE`). They are **downloaded at first use, pinned to a commit, and not redistributed** in this repository. MuJoCo is Apache-2.0; PyTorch, NumPy, Pillow, Matplotlib and imageio keep their own licences. Design notes: [`docs/design.md`](docs/design.md).
+
+
+---
+
+# Legacy: ArmLab RL (original project)
+
+> **Everything below is the original project, kept intact.** The code moved from the repository
+> root into [`legacy/`](legacy/); relative links below were re-pointed there, but the commands in
+> code blocks are unchanged - run them from inside `legacy/` (e.g. `cd legacy && pip install -e .`).
+> The legacy README is reproduced verbatim after this line.
+
 # ArmLab RL — 3D Robot Arm Control with Analytical IK and Reinforcement Learning
 
 **A reproducible RL and control suite for a 3-link robot arm in 3D. It puts a
@@ -15,7 +149,7 @@ measured, versioned results format.
 > **Scope:** the classical comparison is a **20-episode smoke suite** and the
 > GPU RL runs are **single-seed**; neither is a converged multi-seed benchmark.
 > Every number below comes from a saved run directory. See
-> [`docs/experiments.md`](docs/experiments.md) for the protocol and failure
+> [`docs/experiments.md`](legacy/docs/experiments.md) for the protocol and failure
 > analysis.
 
 ---
@@ -25,12 +159,12 @@ measured, versioned results format.
 The original demonstration still runs and shows analytical IK tracking a moving
 target and a trained DQN reaching goals:
 
-[![Robot arm demo](projects/screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "Robot arm demo")
+[![Robot arm demo](legacy/projects/screenshots/inv_kin_Figure_2.png)](https://youtu.be/OU_E-vsCCfU "Robot arm demo")
 
 | Analytical IK tracking | RL reaching |
 |:--:|:--:|
-| ![IK tracking](projects/screenshots/inv_kin_Figure_2.png) | ![RL success](projects/screenshots/RL_Figure_1.png) |
-| ![IK tracking pose](projects/screenshots/inv_kin_Figure_1.png) | ![RL target](projects/screenshots/RL_Figure_4.png) |
+| ![IK tracking](legacy/projects/screenshots/inv_kin_Figure_2.png) | ![RL success](legacy/projects/screenshots/RL_Figure_1.png) |
+| ![IK tracking pose](legacy/projects/screenshots/inv_kin_Figure_1.png) | ![RL target](legacy/projects/screenshots/RL_Figure_4.png) |
 
 Reproducible headless runs also generate their own plots and trajectory
 artifacts (see the results section).
@@ -41,14 +175,14 @@ The repository is deliberately split into three sections:
 
 | section | location | what it is |
 |:--|:--|:--|
-| **1. Analytical inverse kinematics** | [`projects/analytical_inverse_kinematics/`](projects/analytical_inverse_kinematics/) | the original 3-link analytical-IK demo, kept runnable and verified to round-trip reachable targets |
-| **2. RL Double Dueling DQN** | [`projects/rl_double_dueling_dqn/`](projects/rl_double_dueling_dqn/) | the original from-scratch DQN demo, training script and saved model |
-| **3. ArmLab benchmark** | [`src/armlab/`](src/armlab/) | the integrated, tested package: correct kinematics, classical controllers, DQN/SAC, physics, evaluation and artifacts |
+| **1. Analytical inverse kinematics** | [`projects/analytical_inverse_kinematics/`](legacy/projects/analytical_inverse_kinematics/) | the original 3-link analytical-IK demo, kept runnable and verified to round-trip reachable targets |
+| **2. RL Double Dueling DQN** | [`projects/rl_double_dueling_dqn/`](legacy/projects/rl_double_dueling_dqn/) | the original from-scratch DQN demo, training script and saved model |
+| **3. ArmLab benchmark** | [`src/armlab/`](legacy/src/armlab/) | the integrated, tested package: correct kinematics, classical controllers, DQN/SAC, physics, evaluation and artifacts |
 
 The two historical demos stay runnable for provenance and are covered by
 regression tests. Their corrected APIs live in
-[`armlab.legacy`](src/armlab/legacy/), so new code can use them without copying
-the old scripts. See [`projects/README.md`](projects/README.md) for exact run
+[`armlab.legacy`](legacy/src/armlab/legacy/), so new code can use them without copying
+the old scripts. See [`projects/README.md`](legacy/projects/README.md) for exact run
 commands.
 
 ```text
@@ -64,27 +198,27 @@ configs/  tests/  docs/  scripts/  # support for section 3
 ### Training and rollout figures (generated from real run artifacts)
 
 The images below are rendered by
-[`scripts/make_readme_assets.py`](scripts/make_readme_assets.py) from the
+[`scripts/make_readme_assets.py`](legacy/scripts/make_readme_assets.py) from the
 recorded `training_metrics.json`, `sac_metrics_seed*.json`, `trajectory_*.npz`
 and benchmark summaries — they are not mockups or hand-drawn diagrams.
 
 | DQN training (RTX 4050, seed 7) | SAC training (RTX 4050, seed 7) |
 |:--:|:--:|
-| ![DQN training curve](docs/assets/training_dqn.png) | ![SAC training curve](docs/assets/training_sac.png) |
+| ![DQN training curve](legacy/docs/assets/training_dqn.png) | ![SAC training curve](legacy/docs/assets/training_sac.png) |
 
-![DQN reaching rollout](docs/assets/arm_reaching.png)
+![DQN reaching rollout](legacy/docs/assets/arm_reaching.png)
 
 Three panels (start / midpoint / final) of a held-out episode (`seed=100009`)
 executed by the trained DQN checkpoint. Final end-effector error is `0.698`
 legacy units and the episode succeeds; the dashed line is the complete recorded
 end-effector path.
 
-![DQN replay](docs/assets/dqn_replay.gif)
+![DQN replay](legacy/docs/assets/dqn_replay.gif)
 
 Classical smoke benchmark across 16 scenario/controller cells (20 episodes
 each):
 
-![Benchmark success](docs/assets/benchmark_success.png)
+![Benchmark success](legacy/docs/assets/benchmark_success.png)
 
 ---
 
@@ -165,7 +299,7 @@ configs/*.yaml ──► configio ──► frozen dataclasses (config.py)
 Every environment, controller, planner, metric and visualizer uses the same
 `RobotKinematics`; no module re-derives link positions. Optional dependencies
 (MuJoCo, Stable-Baselines3, Dash/Plotly) are imported lazily. Full details:
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/architecture.md`](legacy/docs/architecture.md).
 
 ---
 
@@ -248,7 +382,7 @@ Classical controllers are evaluated in the **continuous** environment so their
 true bounded commands are used. DQN and SAC keep their native action spaces.
 
 Math reference (frames, FK/IK equations, Jacobian, damping, reward):
-[`docs/mathematical_conventions.md`](docs/mathematical_conventions.md).
+[`docs/mathematical_conventions.md`](legacy/docs/mathematical_conventions.md).
 
 ---
 
@@ -330,14 +464,14 @@ scenario places two spheres and the metrics count capsule penetrations. The DLS
 controller's optional end-effector repulsion is enabled, and RRT plans against
 the obstacles, but IK/PD/MPC and the RL policies do not observe the obstacles.
 RRT is available but is not part of the default smoke suite. This is reported
-rather than tuned away; see [`docs/experiments.md`](docs/experiments.md) for the
+rather than tuned away; see [`docs/experiments.md`](legacy/docs/experiments.md) for the
 analysis and possible fixes (limit-avoidance/null-space term, stall re-seeding).
 
 RL smoke runs (2,000-step budgets, CPU) reached 0.00 eval success — expected for
 undertrained agents. They are retained to prove the train → checkpoint → load →
 evaluate path, not to claim learning. The larger GPU-trained runs above are
 separate; the DQN checkpoint reaches **0.70** on its held-out suite. Full
-details in [`docs/experiments.md`](docs/experiments.md).
+details in [`docs/experiments.md`](legacy/docs/experiments.md).
 
 ---
 
@@ -395,7 +529,7 @@ python -m ruff check src tests
 python -m ruff format --check src tests
 ```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, conventions and how to add
+See [`CONTRIBUTING.md`](legacy/CONTRIBUTING.md) for setup, conventions and how to add
 controllers/scenarios. Tests that need optional dependencies skip cleanly when
 those packages are absent.
 

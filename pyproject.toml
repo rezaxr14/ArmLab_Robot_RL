@@ -3,63 +3,55 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "armlab"
-version = "0.2.0"
-description = "ArmLab RL: a reproducible 3D robot-arm benchmark for analytical IK, classical control, and reinforcement learning (Dueling Double DQN / SAC)."
+name = "armforge"
+version = "1.0.0"
+description = "ArmForge: a native MuJoCo UR5e + Robotiq 2F-85 tabletop manipulation lab with GPU-accelerated SAC/TQC + HER training."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
     "numpy>=1.24",
-    "gymnasium>=0.29",
-    "matplotlib>=3.7",
     "PyYAML>=6.0",
+    "mujoco>=3.1",
+    "torch>=2.1",
+    "imageio>=2.31",
+    "imageio-ffmpeg>=0.4.9",
+    "pillow>=10.0",
+    "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
-rl = ["torch>=2.0", "stable-baselines3>=2.3"]
-physics = ["mujoco>=3.0"]
-ui = ["dash>=2.14", "plotly>=5.18"]
 dev = [
     "pytest>=7.4",
-    "pytest-cov>=4.1",
     "ruff>=0.5",
-    "PyYAML>=6.0",
+]
+notebook = [
+    "pandas>=2.0",
+    "ipython>=8.0",
+    "jupyter>=1.0",
 ]
 
 [project.scripts]
-armlab = "armlab.cli:main"
+armforge = "armforge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-armlab = ["py.typed"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = [
-    "ignore::DeprecationWarning",
+markers = [
+    "mujoco: needs the mujoco package and the Menagerie assets (network on first run)",
+    "torch: needs PyTorch",
+    "render: needs an OpenGL backend (MUJOCO_GL=egl or osmesa)",
 ]
+filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = ["projects", "docs"]
+extend-exclude = ["legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
-ignore = [
-    "E501",   # line length is enforced for new code review, not as a hard gate
-    "B027",   # optional no-op hook in the Controller base class
-]
-
-[tool.ruff.lint.per-file-ignores]
-# Tests use pytest.importorskip before importing the module under test, and
-# compare parallel sequences where equal length is part of the fixture.
-"tests/*" = ["E402", "B007", "B905", "B011"]
-
-[tool.coverage.run]
-source = ["armlab"]
-omit = ["src/armlab/dashboard/*"]
+ignore = ["E501", "B008"]

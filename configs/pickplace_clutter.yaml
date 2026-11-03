@@ -1,0 +1,16 @@
+# The complex scene: walled tray as the place target, two loose distractor cubes, full domain randomisation.
+name: pickplace_clutter
+out_dir: runs
+env:
+  seed: 0
+  scene: {tray: true, distractors: 2}
+  task: {name: pickplace, horizon: 90, success_threshold: 0.03, air_goal_prob: 0.15}
+  physics:
+    randomize: {enabled: true, action_noise: 0.05}
+train:
+  total_steps: 3500000
+  num_envs: 4
+  buffer_episodes: 40000
+  eval_every: 50000
+  milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
+  demos: {episodes: 400, bc_steps: 3000}

@@ -1,156 +1,76 @@
-"""Tests for armlab.kinematics: FK, IK round trip, Jacobian, DLS."""
-
 import numpy as np
 import pytest
 
-from armlab.config import RobotParams
-from armlab.kinematics import RobotKinematics, wrap_angle, wrap_angles
+from armforge.kinematics import XmlKinematics
+from armforge.mathutil import axis_angle_to_mat, mat_to_quat, quat_to_mat, rotation_error
+
+PLANAR = """
+<mujoco><worldbody>
+  <body name="b0" pos="0 0 0"><joint name="j1" axis="0 0 1"/>
+    <body name="b1" pos="1 0 0"><joint name="j2" axis="0 0 1"/>
+      <site name="tip" pos="1 0 0"/>
+    </body></body></worldbody></mujoco>"""
+
+CLASSED = """
+<mujoco><default><default class="a"><joint axis="0 1 0"/></default></default>
+<worldbody><body name="b0" childclass="a"><joint name="j"/><site name="s" pos="1 0 0"/></body></worldbody></mujoco>"""
 
 
-@pytest.fixture
-def kin():
-    return RobotKinematics(RobotParams())
+def test_planar_two_link_matches_closed_form():
+    kin = XmlKinematics(PLANAR)
+    for q1, q2 in [(0, 0), (0.3, -0.7), (1.2, 0.4)]:
+        pos, _ = kin.site_pose("tip", {"j1": q1, "j2": q2})
+        expect = [np.cos(q1) + np.cos(q1 + q2), np.sin(q1) + np.sin(q1 + q2), 0]
+        assert np.allclose(pos, expect, atol=1e-12)
 
 
-class TestFK:
-    def test_home_pose(self, kin):
-        pts = kin.link_positions(np.zeros(3))
-        assert pts.shape == (4, 3)
-        np.testing.assert_allclose(pts[0], [0, 0, 0])
-        np.testing.assert_allclose(pts[1], [0, 0, kin.l1])
-        # theta2=0: link 2 points straight up; theta3=0: fully extended.
-        np.testing.assert_allclose(pts[3], [0, 0, kin.l1 + kin.l2 + kin.l3])
-
-    def test_link_lengths_preserved(self, kin):
-        q = np.array([0.7, -0.4, 1.2])
-        pts = kin.link_positions(q)
-        np.testing.assert_allclose(np.linalg.norm(pts[2] - pts[1]), kin.l2)
-        np.testing.assert_allclose(np.linalg.norm(pts[3] - pts[2]), kin.l3)
-
-    def test_nonfinite_rejected(self, kin):
-        with pytest.raises(ValueError):
-            kin.end_effector(np.array([np.nan, 0.0, 0.0]))
-
-    def test_fk_is_stateless(self, kin):
-        q1 = np.array([0.1, 0.2, 0.3])
-        q2 = np.array([-0.4, 0.5, -0.6])
-        first = kin.link_positions(q1)
-        kin.link_positions(q2)  # an unrelated call must not change the result
-        second = kin.link_positions(q1)
-        np.testing.assert_array_equal(first, second)
-        assert kin.params == RobotParams()
+def test_childclass_axis_inheritance():
+    kin = XmlKinematics(CLASSED)
+    pos, _ = kin.site_pose("s", {"j": np.pi / 2})  # rotation about +y takes +x to -z
+    assert np.allclose(pos, [0, 0, -1], atol=1e-12)
 
 
-class TestIK:
-    def test_round_trip_random(self, kin):
-        rng = np.random.default_rng(42)
-        worst = 0.0
-        for _ in range(300):
-            q = rng.uniform([-np.pi, -np.pi / 2, -np.pi], [np.pi, np.pi / 2, np.pi])
-            target = kin.end_effector(q)
-            res = kin.inverse_kinematics(target, q_current=q)
-            assert res.reachable
-            worst = max(worst, res.residual)
-        assert worst < 1e-6
-
-    def test_unreachable(self, kin):
-        res = kin.inverse_kinematics(np.array([100.0, 0.0, 0.0]))
-        assert not res.reachable
-        assert res.solution is None
-        assert np.isnan(res.residual)
-
-    def test_branch_forced(self, kin):
-        target = np.array([10.0, 2.0, 12.0])
-        up = kin.inverse_kinematics(target, elbow="elbow_up")
-        down = kin.inverse_kinematics(target, elbow="elbow_down")
-        assert up.branch == "elbow_up"
-        assert down.branch == "elbow_down"
-        assert up.residual < 1e-6 and down.residual < 1e-6
-        # Different branches genuinely differ in elbow sign.
-        assert up.solution[2] > 0 > down.solution[2]
-
-    def test_closest_branch_selection(self, kin):
-        target = np.array([9.0, 3.0, 11.0])
-        down = kin.inverse_kinematics(target, elbow="elbow_down")
-        closest = kin.inverse_kinematics(target, q_current=down.solution)
-        assert closest.branch == "elbow_down"
-
-    def test_singularity_keeps_waist(self, kin):
-        # Target on the z-axis: theta1 must be preserved, not reset to 0.
-        q_current = np.array([1.234, 0.3, 0.2])
-        target = np.array([0.0, 0.0, kin.l1 + 10.0])
-        res = kin.inverse_kinematics(target, q_current=q_current)
-        assert res.reachable
-        assert res.solution[0] == pytest.approx(1.234)
-
-    def test_bad_elbow_arg(self, kin):
-        with pytest.raises(ValueError):
-            kin.inverse_kinematics(np.array([10, 0, 10]), elbow="sideways")
-
-    def test_rejects_non_triple_shapes(self, kin):
-        with pytest.raises(ValueError):
-            kin.inverse_kinematics(np.zeros((1, 3)))
-
-    def test_shoulder_singularity_equal_links(self):
-        # l2 == l3 and the target is exactly at the shoulder: the arm folds
-        # back on itself (elbow = pi) and any theta2 works. This must be a
-        # deliberate singular path, not a division by D = 0.
-        kin = RobotKinematics(RobotParams(link_lengths=(5.0, 5.0, 5.0)))
-        target = np.array([0.0, 0.0, kin.l1])
-        res = kin.inverse_kinematics(target, q_current=np.array([0.4, 0.7, 0.1]))
-        assert res.reachable
-        assert res.solution is not None
-        assert np.all(np.isfinite(res.solution))
-        assert res.residual < 1e-6
-        assert res.solution[1] == pytest.approx(0.7)
+def test_quaternion_roundtrip():
+    rng = np.random.default_rng(0)
+    for _ in range(20):
+        R = axis_angle_to_mat(rng.normal(size=3), rng.uniform(0, np.pi))
+        assert np.allclose(quat_to_mat(mat_to_quat(R)), R, atol=1e-10)
+    assert np.allclose(rotation_error(np.eye(3), axis_angle_to_mat([0, 0, 1], 0.1)), [0, 0, 0.0998], atol=1e-3)
 
 
-class TestJacobian:
-    def test_matches_finite_differences(self, kin):
-        rng = np.random.default_rng(7)
-        eps = 1e-7
-        for _ in range(50):
-            q = rng.uniform(-np.pi, np.pi, size=3)
-            J = kin.jacobian(q)
-            Jfd = np.zeros((3, 3))
-            for i in range(3):
-                dq = np.zeros(3)
-                dq[i] = eps
-                Jfd[:, i] = (kin.end_effector(q + dq) - kin.end_effector(q - dq)) / (2 * eps)
-            np.testing.assert_allclose(J, Jfd, atol=1e-6)
+def test_ik_solves_planar_target():
+    kin = XmlKinematics(PLANAR)
+    q, pe, _ = kin.solve_ik("tip", ["j1", "j2"], [1.0, 1.0, 0.0], np.eye(3), [0.3, 0.3], iterations=200)
+    assert pe < 1e-3
 
 
-class TestDLS:
-    def test_converges_to_reachable_target(self, kin):
-        target = kin.end_effector(np.array([0.5, 0.2, -0.3]))
-        q = np.zeros(3)
-        for _ in range(80):
-            dx = target - kin.end_effector(q)
-            q = q + kin.damped_least_squares(q, dx, damping=0.05)
-        assert np.linalg.norm(kin.end_effector(q) - target) < 1e-4
+# ---- the real composed UR5e + Robotiq (needs the Menagerie files) --------------------
+@pytest.fixture(scope="module")
+def robot(menagerie):
+    from armforge.scene import compose_robot
 
-    def test_single_step_reduces_error(self, kin):
-        target = np.array([10.0, 1.0, 12.0])
-        q = np.array([0.1, 0.2, 0.3])
-        err0 = np.linalg.norm(kin.end_effector(q) - target)
-        # DLS is a local linearization: use a bounded per-step displacement,
-        # as resolved-rate control does in practice.
-        dx = 0.5 * (target - kin.end_effector(q)) / err0
-        q2 = q + kin.damped_least_squares(q, dx, damping=0.05)
-        err1 = np.linalg.norm(kin.end_effector(q2) - target)
-        assert err1 < err0
-
-    def test_negative_damping_rejected(self, kin):
-        with pytest.raises(ValueError):
-            kin.damped_least_squares(np.zeros(3), np.ones(3), damping=-0.1)
+    root = compose_robot(menagerie)
+    return root, XmlKinematics(root)
 
 
-class TestWrap:
-    def test_wrap_angle(self):
-        assert wrap_angle(0.0) == 0.0
-        assert wrap_angle(np.pi + 0.1) == pytest.approx(-np.pi + 0.1)
-        assert wrap_angle(-np.pi - 0.1) == pytest.approx(np.pi - 0.1)
+def test_home_pose_tool_points_down(robot):
+    from armforge.scene import ARM_JOINTS, HOME_QPOS, TOOL_SITE
 
-    def test_wrap_angles_array(self):
-        arr = wrap_angles(np.array([0.0, 3 * np.pi, -3 * np.pi]))
-        np.testing.assert_allclose(arr, [0.0, -np.pi, -np.pi], atol=1e-12)
+    _, kin = robot
+    pos, R = kin.site_pose(TOOL_SITE, dict(zip(ARM_JOINTS, HOME_QPOS)))
+    assert np.allclose(R[:, 2], [0, 0, -1], atol=1e-3), "gripper approach axis should point down at home"
+    assert np.allclose(pos, [0.492, 0.134, 0.3322], atol=2e-3)
+
+
+def test_workspace_is_reachable_tool_down(robot):
+    import itertools
+
+    from armforge.scene import ARM_JOINTS, HOME_QPOS, TOOL_DOWN_ROT, TOOL_SITE
+
+    _, kin = robot
+    lim = {j: (-np.pi, np.pi) for j in ARM_JOINTS}
+    q, pe, re_ = kin.solve_ik(TOOL_SITE, list(ARM_JOINTS), [0.5, 0, 0.25], TOOL_DOWN_ROT, np.array(HOME_QPOS), limits=lim)
+    assert pe < 1e-4 and re_ < 1e-3
+    for x, y, z in itertools.product([0.33, 0.5, 0.67], [-0.30, 0, 0.30], [0.012, 0.15, 0.32]):
+        _, pe, re_ = kin.solve_ik(TOOL_SITE, list(ARM_JOINTS), [x, y, z], TOOL_DOWN_ROT, q, iterations=600, limits=lim)
+        assert pe < 1e-3 and re_ < 1e-2, (x, y, z, pe, re_)
