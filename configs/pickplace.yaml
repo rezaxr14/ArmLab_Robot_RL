@@ -1,0 +1,15 @@
+# Grasp, lift and place a cube (table / air goals). Scripted demonstrations bootstrap the first grasps.
+name: pickplace
+out_dir: runs
+env:
+  seed: 0
+  task: {name: pickplace, horizon: 80, success_threshold: 0.03, air_goal_prob: 0.3, shaping: 0.0}
+  physics:
+    randomize: {enabled: true}
+train:
+  total_steps: 2500000
+  num_envs: 4
+  buffer_episodes: 32000
+  eval_every: 50000
+  milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
+  demos: {episodes: 300, bc_steps: 2500}

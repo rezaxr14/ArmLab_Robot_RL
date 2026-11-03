@@ -18,16 +18,22 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# --- Local artifacts (results, checkpoints, media) ---
+# --- Notebook ---
+.ipynb_checkpoints/
+
+# --- Local artifacts (training runs, checkpoints, videos, media) ---
+runs/
 artifacts/
 results/
 *.pth
 *.pt
 *.zip
-!projects/rl_double_dueling_dqn/qnetwork.pth
 *.mp4
 *.gif
-!docs/assets/*.gif
+# ...except what the repository deliberately tracks:
+!legacy/projects/rl_double_dueling_dqn/qnetwork.pth
+!legacy/docs/assets/*.gif
+!docs/media/**/*.gif
 
 # --- OS / editor ---
 .DS_Store
