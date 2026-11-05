@@ -83,6 +83,7 @@ class Trainer:
         self.saved_milestones: set[int] = set()
         self.best_eval = (-1.0, float("inf"))
         self.resumed = False
+        self.min_buffer_episodes = 0  # no gradient steps until the buffer holds this many episodes (resume without a saved buffer)
         if resume and (self.run_dir / "latest.pt").exists():
             self._load_latest()
 
@@ -106,16 +107,29 @@ class Trainer:
         tmp = self.run_dir / "latest.pt.tmp"
         torch.save(state, tmp)
         tmp.replace(self.run_dir / "latest.pt")
+        if self.cfg.train.save_buffer and self.buffer.size > 0:
+            btmp = self.run_dir / "latest_buffer.pt.tmp"
+            torch.save(self.buffer.state_dict(), btmp)
+            btmp.replace(self.run_dir / "latest_buffer.pt")
 
     def _load_latest(self) -> None:
-        state = torch.load(self.run_dir / "latest.pt", map_location=self.device)
+        state = torch.load(self.run_dir / "latest.pt", map_location=self.device, weights_only=False)  # our own file
         self.agent.load_state_dict(state["agent"])
         self.steps, self.episodes = state["steps"], state["episodes"]
         self.goal_scale = state["goal_scale"]
         self.saved_milestones = set(state["milestones"])
         self.best_eval = tuple(state["best_eval"])
         self.resumed = True
-        self.log(f"[resume] step {self.steps}, goal_scale {self.goal_scale:.2f} (replay buffer starts empty)")
+        buffer_file = self.run_dir / "latest_buffer.pt"
+        if buffer_file.exists():
+            self.buffer.load_state_dict(torch.load(buffer_file, map_location="cpu", weights_only=False))
+            self.log(f"[resume] step {self.steps}, goal_scale {self.goal_scale:.2f}, replay buffer restored ({self.buffer.size} episodes)")
+        else:
+            self.min_buffer_episodes = self.cfg.train.resume_refill_episodes
+            self.log(
+                f"[resume] step {self.steps}, goal_scale {self.goal_scale:.2f}; no saved replay buffer - collecting "
+                f"{self.min_buffer_episodes} episodes with the loaded policy before training resumes"
+            )
 
     def _snapshot(self, step: int) -> None:
         if step in self.saved_milestones:
@@ -259,7 +273,7 @@ class Trainer:
             obs = next_obs
             self.steps += n
 
-            if self.steps >= tc.warmup_updates_after and self.buffer.transitions >= ac.batch_size:
+            if self.steps >= tc.warmup_updates_after and self.buffer.transitions >= ac.batch_size and self.buffer.size >= self.min_buffer_episodes:
                 credit += n * ac.updates_per_step
                 while credit >= 1.0:
                     losses = self.agent.update(self.buffer.sample(ac.batch_size, ac.her_prob))

@@ -66,3 +66,4 @@ def test_relocated_legacy_links_resolve():
     block = build_readme(legacy, ROOT / "docs" / "media")
     targets = set(re.findall(r"\]\((legacy/[^)\s]+)\)", block[block.index("# Legacy: ArmLab RL"):]))
     assert targets and all((ROOT / t).exists() for t in targets), [t for t in targets if not (ROOT / t).exists()]
+

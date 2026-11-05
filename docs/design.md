@@ -64,3 +64,10 @@ Knobs that matter most: `env.task.max_ee_step` (action scale), `env.task.success
 * Learning (`torch`): HER relabelling uses true future achieved goals, tanh log-prob, quantile Huber loss, twin-critic
   target equals the pairwise minimum, a critic converges to a known value, behaviour cloning fits an expert, policy
   save/load, and a full trainer smoke run with resume.
+
+**CPU forward-kinematics cross-check.** `armforge fk-check` (and notebook cell 3b) compares two independent forward-kinematics
+implementations on the same joint angles: `kinematics.XmlKinematics`, a pure-numpy walk of the generated MJCF tree that shares no code
+with MuJoCo, and MuJoCo's own `mj_kinematics`. It covers random joint vectors within the limits, every joint state a scripted-expert
+episode visits, and the environment's own `ee_pos`. Both are exact rigid-body chains, so they should agree to ~1e-9 m; a wrong
+attachment frame, joint axis or base placement shows up as a millimetre-scale disagreement. The numpy walker is a checker, not a fast
+path (it is slower per call than MuJoCo).

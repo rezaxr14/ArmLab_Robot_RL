@@ -190,6 +190,10 @@ class TrainConfig:
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
     demos: DemoConfig = field(default_factory=DemoConfig)
     vec_backend: str = "subprocess"  # subprocess | sync
+    save_buffer: bool = True  # also checkpoint the replay buffer (latest_buffer.pt) so a resumed run keeps its experience
+    # Resuming a checkpoint that has no saved buffer: collect this many episodes with the loaded policy before any
+    # gradient step, so the critics are not refit on a handful of fresh episodes.
+    resume_refill_episodes: int = 400
 
 
 @dataclass
