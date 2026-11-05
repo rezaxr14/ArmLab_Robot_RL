@@ -94,3 +94,12 @@ def test_no_undefined_names_across_cells():
         missing = sorted({n for n in loads if n not in defined and n not in stores})
         assert not missing, f"cell {i} reads names never defined before it: {missing}"
         defined |= stores
+
+
+def test_setup_cell_makes_package_importable_in_a_running_kernel():
+    """Regression: an editable install is invisible to an already-running Colab kernel, and a bare
+    subprocess.run shows no output there. The setup cell must handle both."""
+    setup = "".join(_cells()[1]["source"])
+    assert "sys.path.insert(0, SRC_DIR)" in setup and "importlib.invalidate_caches()" in setup
+    assert "import armforge" in setup
+    assert "subprocess.Popen" in setup and "subprocess.run(cmd" not in setup  # output is streamed into the cell
