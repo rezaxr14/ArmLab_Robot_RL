@@ -111,6 +111,9 @@ def _results_for(task: str, media_root: Path) -> str:
     ]
     for s in stages:
         out.append(f"| {s['step']:,} | {s['label']} | {s['success_rate']:.0%} | {s['mean_final_distance'] * 100:.1f} cm |")
+    n = last["episodes"]
+    se = (last["success_rate"] * (1 - last["success_rate"]) / max(n, 1)) ** 0.5
+    out += ["", f"*Each snapshot row is {n} held-out episodes: one success rate carries about +/-{se * 100:.0f} points (1 standard error).*", ""]
     out += ["", f"![{task} learning curve]({rel}/learning_curve.png)", "", f"![{task} snapshot success]({rel}/stage_success.png)", ""]
     summary = _load(base / "summary.json")
     if summary:
@@ -215,6 +218,8 @@ def top_section(media_root: str | Path = "docs/media") -> str:
         "python -m pip install -e \".[dev]\"          # numpy, mujoco, torch, imageio, matplotlib, ...",
         "armforge doctor                               # checks mujoco, torch/CUDA, rendering and the Menagerie download",
         "armforge scene --task pickplace --out docs/media/scene_gallery.png",
+        "armforge pack --run runs/reach-demo           # zip a run's checkpoints + media",
+        "armforge fk-check                             # CPU (numpy) forward kinematics vs MuJoCo's FK: should agree to ~1e-9 m",
         "armforge train --config configs/reach.yaml --name reach-demo",
         "armforge publish --run runs/reach-demo        # GIFs, stills, curves -> docs/media/ ; then: armforge readme",
         "```",
@@ -226,7 +231,7 @@ def top_section(media_root: str | Path = "docs/media") -> str:
         "## Repository layout",
         "",
         "```text",
-        "src/armforge/   config, scene (MJCF composition), kinematics oracle, env/ (MuJoCo env, tasks, controller, vec),",
+        "src/armforge/   config, scene (MJCF composition), kinematics oracle + fkcheck (CPU FK vs MuJoCo), env/ (MuJoCo env, tasks, controller, vec),",
         "                rl/ (agent, networks, HER buffer, trainer, experts), media, report, readme, cli",
         "configs/        run presets",
         "notebooks/      armforge_control_panel.ipynb - the control panel",

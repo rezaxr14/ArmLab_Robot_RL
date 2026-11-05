@@ -182,3 +182,15 @@ def test_trainer_smoke_run_writes_everything(tmp_path, menagerie, monkeypatch):
     t2 = Trainer(cfg, resume=True)
     assert t2.steps >= 400
     t2.close()
+
+
+def test_buffer_state_roundtrip():
+    src, _ = fake_buffer(n=7)
+    state = src.state_dict()
+    assert state["size"] == 7 and state["obs"].shape[0] == 7
+    dst = EpisodeBuffer(64, 6, 5, 3, 2, DEV, 0.05, "sparse")
+    dst.load_state_dict(state)
+    assert dst.size == 7 and len(dst) == 7
+    for name in ("obs", "ag", "goal", "act", "shaping"):
+        assert torch.equal(getattr(dst, name)[:7], getattr(src, name)[:7])
+    assert dst._ptr == 7

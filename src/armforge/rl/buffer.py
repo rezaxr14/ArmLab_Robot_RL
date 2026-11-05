@@ -34,6 +34,21 @@ class EpisodeBuffer:
     def __len__(self) -> int:
         return self.size
 
+    def state_dict(self) -> dict:
+        """Stored episodes only (a half-full buffer saves half the bytes), on the CPU."""
+        n = self.size
+        return {
+            "obs": self.obs[:n].cpu(), "ag": self.ag[:n].cpu(), "goal": self.goal[:n].cpu(),
+            "act": self.act[:n].cpu(), "shaping": self.shaping[:n].cpu(), "size": n, "ptr": self._ptr,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        n = min(int(state["size"]), self.capacity)
+        for name in ("obs", "ag", "goal", "act", "shaping"):
+            getattr(self, name)[:n] = state[name][:n].to(self.device)
+        self.size = n
+        self._ptr = int(state["ptr"]) % self.capacity if n == self.capacity else n
+
     @property
     def transitions(self) -> int:
         return self.size * self.horizon

@@ -2,6 +2,7 @@
 
 **A real 6-DoF robot arm (Universal Robots UR5e from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)) with a real two-finger gripper (Robotiq 2F-85), simulated in a custom MuJoCo environment with friction cones, joint damping, force-limited position servos and a 4-bar gripper linkage - and a from-scratch PyTorch RL stack that learns reaching, pushing and pick-and-place from sparse rewards.** No Gymnasium, no toy kinematics: contacts and actuator limits are in the loop.
 
+![ArmForge hero](docs/media/pickplace/progression.gif)
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/notebooks/armforge_control_panel.ipynb)
 
@@ -12,8 +13,6 @@ The whole project is driven from one notebook - [`notebooks/armforge_control_pan
 1. [Results](#results)  2. [The robot and the physics](#the-robot-and-the-physics)  3. [How it learns](#how-it-learns)  4. [Run it](#run-it)  5. [Repository layout](#repository-layout)  6. [Limitations](#limitations)  7. [Licence](#license-and-third-party-assets)  8. [Legacy project](#legacy-armlab-rl-original-project)
 
 ## Results
-
-> **No training run has been published in this checkout yet.** The sections below fill in automatically - with real GIFs of early failures, mid-training attempts and the final policy, learning curves and success tables - when you run the notebook's *Publish* cell (or `armforge publish`). Nothing here is a mock-up.
 
 ### Reach
 
@@ -31,11 +30,53 @@ Slide a free 40 mm cube to a goal on the table with the **closed** gripper held 
 
 Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in the air, or (in the cluttered variant) inside a walled tray among loose distractor cubes. Needs a real grasp: pad friction, finger linkage compliance and grip force all matter.
 
-> *No published run for `pickplace` yet - run the notebook's **Publish** cell to generate the media here.*
+**Untrained policy: 0% success. After 875,000 steps: 60%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 12.9 cm).
+
+![pickplace progression](docs/media/pickplace/progression.gif)
+
+*One continuous clip: the same start/goal seeds replayed by policy snapshots from step 0 to the end of training.*
+
+![pickplace stages, end of episode](docs/media/pickplace/stages_end.png)
+
+![pickplace stages, mid episode](docs/media/pickplace/stages_mid.png)
+
+| snapshot (env steps) | stage | success | mean final distance |
+|--:|:--|--:|--:|
+| 0 | untrained | 0% | 16.6 cm |
+| 50,000 | 2% of training | 37% | 17.8 cm |
+| 250,000 | 10% of training | 53% | 21.4 cm |
+| 875,000 | 35% of training | 60% | 12.9 cm |
+
+*Each snapshot row is 30 held-out episodes: one success rate carries about +/-9 points (1 standard error).*
+
+
+![pickplace learning curve](docs/media/pickplace/learning_curve.png)
+
+![pickplace snapshot success](docs/media/pickplace/stage_success.png)
+
+<details><summary>Per-snapshot clips</summary>
+
+**0 steps (untrained)** - `hero` camera, 0% success
+
+![](docs/media/pickplace/stage_000000000_hero.gif)
+
+**50,000 steps (2% of training)** - `hero` camera, 37% success
+
+![](docs/media/pickplace/stage_000050000_hero.gif)
+
+**250,000 steps (10% of training)** - `hero` camera, 53% success
+
+![](docs/media/pickplace/stage_000250000_hero.gif)
+
+**875,000 steps (35% of training)** - `hero` camera, 60% success
+
+![](docs/media/pickplace/stage_000875000_hero.gif)
+
+</details>
 
 ## The robot and the physics
 
-*Scene gallery: written to `docs/media/scene_gallery.png` by the notebook's Media cell or `armforge scene`.*
+![scene gallery](docs/media/scene_gallery.png)
 
 The scene is generated programmatically ([`scene.py`](src/armforge/scene.py)) from the pinned Menagerie models: the UR5e and 2F-85 XML are merged (names, classes, meshes and contact exclusions are namespaced), the gripper is mounted on the flange, and a table, optional walled tray, free cubes, a mocap goal marker and five cameras are added. The meshes are downloaded once into a cache (about 45 MB), not vendored.
 
@@ -92,6 +133,8 @@ git clone https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git && cd 3
 python -m pip install -e ".[dev]"          # numpy, mujoco, torch, imageio, matplotlib, ...
 armforge doctor                               # checks mujoco, torch/CUDA, rendering and the Menagerie download
 armforge scene --task pickplace --out docs/media/scene_gallery.png
+armforge pack --run runs/reach-demo           # zip a run's checkpoints + media
+armforge fk-check                             # CPU (numpy) forward kinematics vs MuJoCo's FK: should agree to ~1e-9 m
 armforge train --config configs/reach.yaml --name reach-demo
 armforge publish --run runs/reach-demo        # GIFs, stills, curves -> docs/media/ ; then: armforge readme
 ```
@@ -101,7 +144,7 @@ Config presets live in [`configs/`](configs/) (`reach`, `push`, `pickplace`, `pi
 ## Repository layout
 
 ```text
-src/armforge/   config, scene (MJCF composition), kinematics oracle, env/ (MuJoCo env, tasks, controller, vec),
+src/armforge/   config, scene (MJCF composition), kinematics oracle + fkcheck (CPU FK vs MuJoCo), env/ (MuJoCo env, tasks, controller, vec),
                 rl/ (agent, networks, HER buffer, trainer, experts), media, report, readme, cli
 configs/        run presets
 notebooks/      armforge_control_panel.ipynb - the control panel
