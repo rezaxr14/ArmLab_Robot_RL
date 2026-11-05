@@ -281,6 +281,7 @@ def build_scene_tree(cfg: EnvConfig, menagerie_root: str | Path | None = None) -
             raise ValueError(f"gripper default class {cls} has no <geom>")
         geom.set("friction", fmt([p.pad_friction, 0.005, 0.0001]))
         geom.set("condim", "4")
+        geom.set("solref", fmt(p.pad_solref))
 
     # ---- assets ----
     asset = _section(root, "asset")

@@ -285,7 +285,16 @@ class ArmForgeEnv:
         self._sync_kinematics()
         self._prev_ee = self.ee_pos
         self._ee_vel = np.zeros(3)
-        return self._observation()
+        self._unstable = False
+        self._last_obs = self._observation()
+        return self._last_obs
+
+    def _diverged(self) -> bool:
+        """True when the simulation has blown up (non-finite, or a body flung far away / spinning wildly)."""
+        d = self.data
+        if not (np.isfinite(d.qpos).all() and np.isfinite(d.qvel).all()):
+            return True
+        return bool(np.abs(d.qpos).max() > 5.0 or np.abs(d.qvel).max() > 100.0)
 
     def _sync_kinematics(self) -> None:
         mujoco.mj_kinematics(self.model, self.data)
@@ -299,6 +308,9 @@ class ArmForgeEnv:
         noise = self.cfg.physics.randomize.action_noise
         if noise > 0 and self.cfg.physics.randomize.enabled:
             a = np.clip(a + self.rng.normal(0.0, noise, a.shape), -1.0, 1.0)
+
+        if self._unstable:  # frozen after a blow-up: keep returning the last sane observation until the horizon
+            return self._frozen_step()
 
         delta, grip_cmd = self.task.command(self, a)
         if grip_cmd is not None:
@@ -318,6 +330,9 @@ class ArmForgeEnv:
         self.data.ctrl[self.grip_act] = GRIPPER_CTRL_MAX * self.grip
         for _ in range(self.substeps):
             mujoco.mj_step(self.model, self.data)
+        if self._diverged():
+            self._unstable = True
+            return self._frozen_step()
         self._sync_kinematics()
 
         ee = self.ee_pos
@@ -326,6 +341,7 @@ class ArmForgeEnv:
         self.t += 1
 
         obs = self._observation()
+        self._last_obs = obs
         dist = float(goal_distance(obs["achieved_goal"], obs["desired_goal"]))
         success = dist <= cfg_t.success_threshold
         reward = float(goal_reward(dist, cfg_t.success_threshold, cfg_t.reward)) + self.task.extra_reward(self)
@@ -335,8 +351,17 @@ class ArmForgeEnv:
             "distance": dist,
             "shaping": self.task.extra_reward(self),
             "ncon": int(self.data.ncon),
+            "unstable": False,
         }
         return obs, reward, done, info
+
+    def _frozen_step(self):
+        """Episode continues (fixed horizon) on the last sane observation; never counted as a success."""
+        self.t += 1
+        obs = self._last_obs
+        dist = float(goal_distance(obs["achieved_goal"], obs["desired_goal"]))
+        info = {"is_success": False, "distance": max(dist, self.cfg.task.success_threshold + 1e-3), "shaping": 0.0, "ncon": 0, "unstable": True}
+        return obs, float(goal_reward(info["distance"], self.cfg.task.success_threshold, self.cfg.task.reward)), self.t >= self.horizon, info
 
     # ------------------------------------------------------------------ HER hook
     def compute_reward(self, achieved_goal, desired_goal):

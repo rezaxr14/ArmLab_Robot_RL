@@ -241,3 +241,19 @@ def test_hand_reaches_a_commanded_step_without_overshoot(menagerie):
     assert abs(ys[-1] - ys[-4]) < 0.003, "still moving 12 steps after the command ended"
     del target
     env.close()
+
+
+def test_divergence_is_contained_not_propagated(menagerie):
+    """A blown-up simulation must freeze on the last sane observation and be flagged, never leak huge numbers."""
+    env = make(menagerie, task={"name": "pickplace", "horizon": 6})
+    obs = env.reset(seed=0)
+    env.step(np.zeros(4))
+    env._diverged = lambda: True  # simulate the blow-up deterministically (MuJoCo may self-reset on real NaNs)
+    obs, _, done, info = env.step(np.zeros(4))
+    assert info["unstable"] and not info["is_success"]
+    assert np.abs(obs["observation"]).max() < 100 and np.isfinite(obs["observation"]).all()
+    while not done:
+        obs, _, done, info = env.step(np.zeros(4))
+        assert info["unstable"] and np.isfinite(obs["observation"]).all()
+    assert env.reset(seed=1) is not None and not env._unstable
+    env.close()

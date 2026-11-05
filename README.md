@@ -47,7 +47,7 @@ The scene is generated programmatically ([`scene.py`](src/armforge/scene.py)) fr
 | Cube friction (sliding, torsional, rolling) | (0.6, 0.01, 0.0005); MuJoCo uses the per-component **max** of two touching geoms, so cube-on-table slides at mu = 0.6 |
 | Gripper pad friction | 1 sliding, contact dimension 4 (adds torsional friction), pad priority overrides the cube's values |
 | Cube | 40 mm, 80 g, `condim` 4 |
-| Contact softness | `solref` (0.004, 1), `solimp` (0.95, 0.99, 0.001) |
+| Contact softness | `solref` (0.01, 1) (pads (0.01, 1)), `solimp` (0.95, 0.99, 0.001) |
 | Arm actuators | UR5e position servos from Menagerie: kp 2000 / 500 N m/rad, force limits 150 / 28 N m; servo damping kd scaled x0.25 (the stock servo is over-damped: 0.2 s time constant) |
 | Arm joint damping + Coulomb friction | 2 N m s/rad + 0.1 N m `frictionloss` on every joint (added on top of the model's armature) |
 | Gravity | 9.81 m/s^2; the arm and gripper bodies are gravity-compensated (`arm_gravity_comp`, as the UR controller does on hardware) - the cube is not |

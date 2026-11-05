@@ -87,3 +87,11 @@ def test_servo_damping_scale_scales_kd_only(menagerie):
         b = soft.find(f".//default[@class='{cls}']/general").get("biasprm").split()
         assert a[:2] == b[:2], "kp terms must not change"
         assert float(b[2]) == pytest.approx(0.25 * float(a[2]))
+
+
+def test_pad_and_contact_softness_are_written(menagerie):
+    cfg = from_dict(EnvConfig, {"physics": {"pad_solref": [0.012, 1.0], "solref": [0.009, 1.0]}})
+    root = build_scene_tree(cfg, menagerie)
+    assert root.find(".//default[@class='rq_pad_box1']/geom").get("solref") == "0.012 1"
+    assert root.find(".//geom[@name='table_top']").get("solref") == "0.009 1"
+    assert from_dict(EnvConfig, {}).physics.pad_solref[0] >= 0.01

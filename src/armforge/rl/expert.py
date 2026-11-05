@@ -110,6 +110,11 @@ class PickPlaceExpert:
             # servo the *cube* (not the hand) to a point above the goal, then to the goal
             above = goal + np.array([0.0, 0.0, max(0.05, self.HOVER_Z - goal[2])]) if np.linalg.norm(obj[:2] - goal[:2]) > 0.02 else goal
             err = above - obj
+            lost = e.gripper_opening() > 0.9 or np.linalg.norm(obj - ee) > 0.06  # closed on nothing / cube fell away
+            self.wait = self.wait + 1 if lost else 0
+            if self.wait >= 2:
+                self._go("hover")  # dropped it: open, go back above the cube and regrasp
+                return np.append(np.zeros(3), open_g)
             if np.linalg.norm(obj - goal) < 0.008:
                 self._go("hold" if in_air else "release")
             lift_first = obj[2] < 0.05 and np.linalg.norm(obj[:2] - goal[:2]) > 0.02
@@ -157,6 +162,7 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
                 "grip": round(env.gripper_opening(), 3),
                 "pads": env.pad_contacts().astype(int).tolist(),
                 "ncon": info["ncon"],
+                "unstable": bool(info.get("unstable", False)),
             }
         )
     return {
@@ -178,6 +184,9 @@ def summarize_episode(ep: dict) -> str:
     final = ep["trace"][-1]
     phases = " ".join(f"{name}@{t}" for t, name in ep["phases"]) or "-"
     kind = "air goal" if ep["goal_height"] > 0.05 else "table goal"
+    blown = next((x for x in ep["trace"] if x["unstable"]), None)
+    if blown is not None:
+        phases += f" | SIMULATION DIVERGED at t={blown['t']} in phase '{blown['phase']}'"
     return (
         f"{'ok  ' if ep['success'] else 'FAIL'} seed {ep['seed']} | {kind} | phases: {phases} | "
         f"final dist {final['distance'] * 100:.1f} cm, grip {final['grip']:.2f}, pads {final['pads']}"
