@@ -211,3 +211,33 @@ def test_reach_parks_the_cube_out_of_the_way(menagerie):
     cube = env.object_pos("cube")
     assert np.linalg.norm(cube[:2] - np.array(env.layout.workspace_center)) > 0.4
     env.close()
+
+
+def test_servo_gain_is_derived_from_the_model(menagerie):
+    env = make(menagerie, task={"name": "reach", "horizon": 5})
+    assert 1.0 <= env.servo_gain <= 6.0
+    slow = make(menagerie, physics={"servo_damping_scale": 1.0}, task={"name": "reach", "horizon": 5})
+    assert slow.servo_gain > env.servo_gain, "a more damped servo needs more lead compensation"
+    env.close()
+    slow.close()
+
+
+def test_hand_reaches_a_commanded_step_without_overshoot(menagerie):
+    """Step response of the full Cartesian loop: arrive within a few control steps and do not ring."""
+    env = make(menagerie, task={"name": "reach", "horizon": 30})
+    env.reset(seed=0)
+    start = env.ee_pos.copy()
+    target = start + np.array([0.0, 0.10, 0.0])
+    ys = []
+    for _ in range(4):  # four full-scale +y actions = 4 * max_ee_step
+        env.step(np.array([0.0, 1.0, 0.0]))
+        ys.append(env.ee_pos[1] - start[1])
+    for _ in range(12):
+        env.step(np.zeros(3))
+        ys.append(env.ee_pos[1] - start[1])
+    commanded = 4 * env.cfg.task.max_ee_step
+    assert ys[-1] == pytest.approx(commanded, abs=0.15 * commanded), "did not settle on the commanded displacement"
+    assert max(ys) < commanded * 1.2, "overshoots the commanded displacement"
+    assert abs(ys[-1] - ys[-4]) < 0.003, "still moving 12 steps after the command ended"
+    del target
+    env.close()

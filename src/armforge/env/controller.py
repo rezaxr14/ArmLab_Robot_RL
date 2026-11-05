@@ -59,15 +59,15 @@ class CartesianController:
         self,
         data: mujoco.MjData,
         target_pos: np.ndarray,
-        q_ref: np.ndarray | None = None,
+        gain: float = 1.0,
         max_lead: float = 0.15,
     ) -> np.ndarray:
         """Joint position targets that move the pinch point towards ``target_pos`` this step.
 
-        ``q_ref`` is the previous *commanded* configuration (defaults to the measured one). Building
-        on the command instead of the measurement keeps the servo target from chasing steady-state
-        error (no drift under load). The target may lead the measured joints by at most ``max_lead``
-        rad so it cannot wind up while the arm is blocked by a contact.
+        The target is built on the *measured* joints (no integrated command: an integrator around the
+        servo lag oscillates). ``gain`` > 1 compensates the servo lag so that the achieved motion matches
+        the requested one; the target may lead the measured joints by at most ``max_lead`` rad, which
+        also bounds the force a blocked arm can apply.
 
         ``data`` must be kinematics-current (``mj_kinematics`` + ``mj_comPos``).
         """
@@ -77,8 +77,7 @@ class CartesianController:
         if peak > self.max_dq:
             dq = dq * (self.max_dq / peak)
         q_meas = data.qpos[self.qadr]
-        q = (q_meas if q_ref is None else np.asarray(q_ref)) + dq
-        q = np.clip(q, q_meas - max_lead, q_meas + max_lead)
+        q = np.clip(q_meas + gain * dq, q_meas - max_lead, q_meas + max_lead)
         return np.clip(q, self.q_lo, self.q_hi)
 
     # -- offline IK (resets, start pose) ------------------------------------------------

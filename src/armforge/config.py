@@ -66,6 +66,12 @@ class PhysicsConfig:
     arm_joint_damping: float = 2.0  # N m s/rad added on top of the actuator's own damping
     arm_frictionloss: float = 0.1  # N m  (Coulomb friction in the arm joints)
     arm_gravity_comp: bool = True  # the real UR controller compensates gravity; MuJoCo `gravcomp` on arm+gripper bodies
+    # Menagerie's arm servos are heavily over-damped (kd/kp = 0.2 s: only ~18% of a commanded move happens per
+    # 40 ms control step). Scaling kd makes the servo respond in ~50 ms, closer to a real UR joint controller.
+    servo_damping_scale: float = 0.25
+    # Gain applied to the joint step the IK asks for, to cancel the servo lag. 0 = derive it from the model
+    # (1 / fraction-of-a-step-achieved); 1 = no compensation.
+    servo_lead_gain: float = 0.0
     randomize: RandomizationConfig = field(default_factory=RandomizationConfig)
 
 

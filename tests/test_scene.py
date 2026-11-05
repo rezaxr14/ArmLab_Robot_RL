@@ -77,3 +77,13 @@ def test_gravity_compensation_is_applied_to_robot_only(menagerie):
     assert len(robot) > 15 and all(b.get("gravcomp") == "1" for b in robot)
     assert on.find(".//body[@name='cube']").get("gravcomp") is None
     assert all(b.get("gravcomp") is None for b in off.iter("body"))
+
+
+def test_servo_damping_scale_scales_kd_only(menagerie):
+    base = build_scene_tree(from_dict(EnvConfig, {"physics": {"servo_damping_scale": 1.0}}), menagerie)
+    soft = build_scene_tree(from_dict(EnvConfig, {"physics": {"servo_damping_scale": 0.25}}), menagerie)
+    for cls in ("ur5e", "size1"):
+        a = base.find(f".//default[@class='{cls}']/general").get("biasprm").split()
+        b = soft.find(f".//default[@class='{cls}']/general").get("biasprm").split()
+        assert a[:2] == b[:2], "kp terms must not change"
+        assert float(b[2]) == pytest.approx(0.25 * float(a[2]))

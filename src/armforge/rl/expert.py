@@ -74,44 +74,55 @@ class PickPlaceExpert:
     def reset(self) -> None:
         self.phase = "hover"
         self.wait = 0
+        self.phase_log: list[tuple[int, str]] = [(0, "hover")]
+        self._t = 0
+
+    def _go(self, phase: str) -> None:
+        self.phase, self.wait = phase, 0
+        self.phase_log.append((self._t, phase))
 
     def act(self) -> np.ndarray:
+        self._t += 1
         e = self.env
         step = e.cfg.task.max_ee_step
         ee, obj, goal = e.ee_pos, e.object_pos("cube"), e.goal
         close_g, open_g = 1.0, -1.0
+        in_air = goal[2] > e.layout.object_half_size + 0.03  # an air goal must be *held*, not released
 
         if self.phase == "hover":
             target = np.array([obj[0], obj[1], self.HOVER_Z])
             if np.linalg.norm(target[:2] - ee[:2]) < 0.008 and abs(ee[2] - self.HOVER_Z) < 0.01:
-                self.phase = "descend"
+                self._go("descend")
             return np.append(_p_action(target - ee, step), open_g)
         if self.phase == "descend":
             target = np.array([obj[0], obj[1], self.GRASP_Z])
             if abs(ee[2] - self.GRASP_Z) < 0.006:
-                self.phase, self.wait = "close", 0
+                self._go("close")
             return np.append(_p_action(target - ee, step), open_g)
         if self.phase == "close":
             self.wait += 1
             if self.wait >= 5 and e.pad_contacts().all():
-                self.phase = "carry"
+                self._go("carry")
             elif self.wait > 12:
-                self.phase = "hover"  # missed the cube: retry
+                self._go("hover")  # missed the cube: retry
             return np.append(np.zeros(3), close_g)
         if self.phase == "carry":
             # servo the *cube* (not the hand) to a point above the goal, then to the goal
             above = goal + np.array([0.0, 0.0, max(0.05, self.HOVER_Z - goal[2])]) if np.linalg.norm(obj[:2] - goal[:2]) > 0.02 else goal
             err = above - obj
             if np.linalg.norm(obj - goal) < 0.008:
-                self.phase, self.wait = "release", 0
+                self._go("hold" if in_air else "release")
             lift_first = obj[2] < 0.05 and np.linalg.norm(obj[:2] - goal[:2]) > 0.02
             if lift_first:
                 err = np.array([0.0, 0.0, 0.06])
             return np.append(_p_action(err, step), close_g)
+        if self.phase == "hold":
+            # keep the cube at the in-air goal with the gripper closed (success is judged at the last step)
+            return np.append(_p_action(goal - obj, step), close_g)
         if self.phase == "release":
             self.wait += 1
             if self.wait > 4:
-                self.phase = "retreat"
+                self._go("retreat")
             return np.append(np.zeros(3), open_g)
         # retreat: straight up, gripper open
         return np.append(_p_action(np.array([0.0, 0.0, 0.08]), step), open_g)
@@ -127,7 +138,7 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
     obs = env.reset(seed=seed, goal_scale=goal_scale)
     expert = make_expert(env)
     expert.reset()
-    O, AG, A, S = [obs["observation"]], [obs["achieved_goal"]], [], []
+    O, AG, A, S, trace = [obs["observation"]], [obs["achieved_goal"]], [], [], []
     goal, info, done = obs["desired_goal"], {}, False
     while not done:
         a = np.clip(expert.act() + (rng.normal(0, noise_std, env.action_dim) if noise_std > 0 else 0.0), -1, 1)
@@ -136,6 +147,18 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
         AG.append(obs["achieved_goal"])
         A.append(a)
         S.append(info["shaping"])
+        trace.append(
+            {
+                "t": len(A),
+                "phase": getattr(expert, "phase", ""),
+                "ee": env.ee_pos.round(4).tolist(),
+                "ag": obs["achieved_goal"].round(4).tolist(),
+                "distance": round(info["distance"], 4),
+                "grip": round(env.gripper_opening(), 3),
+                "pads": env.pad_contacts().astype(int).tolist(),
+                "ncon": info["ncon"],
+            }
+        )
     return {
         "obs": np.stack(O),
         "ag": np.stack(AG),
@@ -143,4 +166,19 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
         "act": np.stack(A).astype(np.float32),
         "shaping": np.array(S, np.float32),
         "success": bool(info["is_success"]),
+        "phases": list(getattr(expert, "phase_log", [])),
+        "trace": trace,
+        "goal_height": float(goal[2]),
+        "seed": seed,
     }
+
+
+def summarize_episode(ep: dict) -> str:
+    """One line: outcome, goal type, the phase timeline and where it ended - to see *why* an episode failed."""
+    final = ep["trace"][-1]
+    phases = " ".join(f"{name}@{t}" for t, name in ep["phases"]) or "-"
+    kind = "air goal" if ep["goal_height"] > 0.05 else "table goal"
+    return (
+        f"{'ok  ' if ep['success'] else 'FAIL'} seed {ep['seed']} | {kind} | phases: {phases} | "
+        f"final dist {final['distance'] * 100:.1f} cm, grip {final['grip']:.2f}, pads {final['pads']}"
+    )

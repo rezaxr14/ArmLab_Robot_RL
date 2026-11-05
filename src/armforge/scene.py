@@ -260,6 +260,14 @@ def build_scene_tree(cfg: EnvConfig, menagerie_root: str | Path | None = None) -
         for body in base_body.iter("body"):
             body.set("gravcomp", "1")
 
+    # ---- servo damping: scale the kd term of the arm position actuators (biasprm = "0 -kp -kd") ----
+    for cls in ("ur5e", "size1"):
+        general = root.find(f".//default[@class='{cls}']/general")
+        if general is not None and general.get("biasprm"):
+            parts = general.get("biasprm").split()
+            parts[2] = f"{float(parts[2]) * p.servo_damping_scale:g}"
+            general.set("biasprm", " ".join(parts))
+
     # ---- arm joint friction/damping and gripper pad friction ----
     ur5e_default = root.find(".//default[@class='ur5e']")
     joint_default = None if ur5e_default is None else ur5e_default.find("joint")

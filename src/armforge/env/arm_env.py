@@ -72,7 +72,6 @@ class ArmForgeEnv:
         self.ee_start = np.zeros(3)
         self._prev_ee = np.zeros(3)
         self._ee_vel = np.zeros(3)
-        self.q_cmd = np.zeros(6)
         self.t = 0
         self._renderer = None
         self._renderer_size = None
@@ -85,6 +84,7 @@ class ArmForgeEnv:
             self.arm_jids,
             TOOL_DOWN_ROT,
         )
+        self.servo_gain = self._servo_lead_gain()
         self.action_dim = self.task.action_dim
         self.action_space = Box.symmetric(self.action_dim)
         self.goal_dim = 3
@@ -140,6 +140,21 @@ class ArmForgeEnv:
         self._cube_bodies = np.array(
             [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n) for n in ("cube", *self.layout.distractor_names)]
         )
+
+    def _servo_lead_gain(self) -> float:
+        """Gain that cancels the arm servo lag: 1 / (fraction of a commanded move achieved per control step).
+
+        The position servo ``tau = kp (c - q) - kd qdot`` is heavily over-damped, so the joint follows its
+        target with time constant kd/kp; over one control period ``dt`` it covers ``1 - exp(-dt kp/kd)``.
+        """
+        manual = self.cfg.physics.servo_lead_gain
+        if manual > 0:
+            return float(manual)
+        kp = self.model.actuator_gainprm[self.arm_act, 0]
+        kd = -self.model.actuator_biasprm[self.arm_act, 2]
+        tau = float(np.mean(kd / kp))
+        achieved = 1.0 - np.exp(-self.dt / max(tau, 1e-6))
+        return float(np.clip(1.0 / achieved, 1.0, 6.0))
 
     # ------------------------------------------------------------------ randomisation
     def _randomize_physics(self) -> dict[str, float]:
@@ -270,7 +285,6 @@ class ArmForgeEnv:
         self._sync_kinematics()
         self._prev_ee = self.ee_pos
         self._ee_vel = np.zeros(3)
-        self.q_cmd = self.data.qpos[self.arm_qadr].copy()
         return self._observation()
 
     def _sync_kinematics(self) -> None:
@@ -300,8 +314,7 @@ class ArmForgeEnv:
             target[2] = self.task.lock_z
 
         self._sync_kinematics()
-        self.q_cmd = self.controller.joint_targets(self.data, target, self.q_cmd)
-        self.data.ctrl[self.arm_act] = self.q_cmd
+        self.data.ctrl[self.arm_act] = self.controller.joint_targets(self.data, target, self.servo_gain)
         self.data.ctrl[self.grip_act] = GRIPPER_CTRL_MAX * self.grip
         for _ in range(self.substeps):
             mujoco.mj_step(self.model, self.data)

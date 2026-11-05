@@ -91,15 +91,21 @@ def cmd_expert(args) -> int:
     from dataclasses import replace
 
     from .env.arm_env import ArmForgeEnv
-    from .rl.expert import rollout_expert
+    from .rl.expert import rollout_expert, summarize_episode
 
     cfg = _cfg(args)
     env = ArmForgeEnv(replace(cfg.env, seed=args.seed))
-    wins, dists = 0, []
+    wins, dists, traces = 0, [], []
     for i in range(args.episodes):
         ep = rollout_expert(env, seed=args.seed + i)
         wins += int(ep["success"])
         dists.append(float(((ep["ag"][-1] - ep["goal"]) ** 2).sum() ** 0.5))
+        print(summarize_episode(ep))
+        if args.trace_out and not ep["success"]:
+            traces.append({k: ep[k] for k in ("seed", "phases", "trace", "goal_height")})
+    if args.trace_out:
+        Path(args.trace_out).write_text(json.dumps(traces))
+        print(f"wrote {len(traces)} failing-episode traces to {args.trace_out}")
     print(json.dumps({"task": cfg.env.task.name, "episodes": args.episodes, "success_rate": wins / args.episodes, "mean_final_distance": sum(dists) / len(dists)}, indent=2))
     env.close()
     return 0
@@ -173,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     add_cfg(p)
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=1_000_000)
+    p.add_argument("--trace-out", help="write a per-step trace of every failing episode to this JSON file")
     p.set_defaults(fn=cmd_expert)
 
     p = sub.add_parser("train", help="train a policy")
