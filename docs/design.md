@@ -14,9 +14,14 @@ simulator and can be opened in the MuJoCo viewer (`python -m mujoco.viewer --mjc
 
 **Cartesian control through the real servos.** The policy commands a pinch-point displacement; damped-least-squares
 IK turns it into joint position targets for the UR5e's force-limited PD actuators. The tool orientation is held
-pointing down. The commanded joint vector is persistent (it does not chase measured sag) and may lead the measured
-joints by at most 0.15 rad, so a blocked arm cannot wind up. Arm and gripper bodies are gravity-compensated, as the
-UR controller does on hardware; the cube is not.
+pointing down. Menagerie's servos are heavily over-damped (kd/kp = 0.2 s, so only ~18 % of a commanded joint move
+happens in one 40 ms control step), which makes a hand that can never keep up with a scripted or learned controller.
+Two things fix that without teleporting anything: the servo `kd` is scaled by `physics.servo_damping_scale` (default
+0.25, a ~50 ms response, closer to a real UR joint controller), and the joint step requested by the IK is multiplied by a
+lead gain derived from the model (`1 / fraction-of-a-step-achieved`, override with `physics.servo_lead_gain`). The
+command is *not* persistent: it is the measured joints plus a lead of at most 0.15 rad, so a blocked arm cannot wind
+up (an integrator wrapped around the servo lag oscillates, which an earlier version of this code did). Arm and gripper
+bodies are gravity-compensated, as the UR controller does on hardware; the cube is not.
 
 **Friction.** Elliptic cones with `impratio` 10, `condim` 4 on pads, cube and table (torsional friction), small rolling
 friction. MuJoCo combines two geoms' friction with the per-component **max** unless their `priority` differs; the
