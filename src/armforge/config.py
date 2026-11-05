@@ -61,7 +61,10 @@ class PhysicsConfig:
     object_mass: float = 0.08  # kg
     object_half_size: float = 0.02  # m  (a 40 mm cube; the 2F-85 opens to 85 mm)
     object_condim: int = 4
-    solref: tuple[float, float] = (0.004, 1.0)  # contact stiffness / damping ratio
+    # Contact softness. MuJoCo clamps the time constant to >= 2 * timestep (0.004 s here), so 0.004 sits exactly on the
+    # stability edge; a small light cube squeezed between stiff pads then occasionally diverges. 0.01 is ~2.5x softer.
+    solref: tuple[float, float] = (0.01, 1.0)  # contact stiffness (time constant, s) / damping ratio
+    pad_solref: tuple[float, float] = (0.01, 1.0)  # gripper pads (Menagerie ships 0.004; the pads' priority makes theirs win)
     solimp: tuple[float, float, float] = (0.95, 0.99, 0.001)
     arm_joint_damping: float = 2.0  # N m s/rad added on top of the actuator's own damping
     arm_frictionloss: float = 0.1  # N m  (Coulomb friction in the arm joints)

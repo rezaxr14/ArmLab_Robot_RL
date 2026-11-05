@@ -52,7 +52,7 @@ def physics_table() -> str:
         ("Cube friction (sliding, torsional, rolling)", f"{_fmt_tuple(p.object_friction)}; MuJoCo uses the per-component **max** of two touching geoms, so cube-on-table slides at mu = {max(p.table_friction[0], p.object_friction[0]):g}"),
         ("Gripper pad friction", f"{p.pad_friction:g} sliding, contact dimension 4 (adds torsional friction), pad priority overrides the cube's values"),
         ("Cube", f"{2 * p.object_half_size * 1000:g} mm, {p.object_mass * 1000:g} g, `condim` {p.object_condim}"),
-        ("Contact softness", f"`solref` {_fmt_tuple(p.solref)}, `solimp` {_fmt_tuple(p.solimp)}"),
+        ("Contact softness", f"`solref` {_fmt_tuple(p.solref)} (pads {_fmt_tuple(p.pad_solref)}), `solimp` {_fmt_tuple(p.solimp)}"),
         ("Arm actuators", f"UR5e position servos from Menagerie: kp 2000 / 500 N m/rad, force limits 150 / 28 N m; servo damping kd scaled x{p.servo_damping_scale:g} (the stock servo is over-damped: 0.2 s time constant)"),
         ("Arm joint damping + Coulomb friction", f"{p.arm_joint_damping:g} N m s/rad + {p.arm_frictionloss:g} N m `frictionloss` on every joint (added on top of the model's armature)"),
         ("Gravity", f"{p.gravity:g} m/s^2; the arm and gripper bodies are gravity-compensated (`arm_gravity_comp`, as the UR controller does on hardware) - the cube is not"),

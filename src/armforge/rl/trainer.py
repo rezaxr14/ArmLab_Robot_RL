@@ -78,6 +78,7 @@ class Trainer:
         self.goal_scale = cur.start_scale if cur.enabled else 1.0
         self.steps = 0
         self.episodes = 0
+        self.unstable_episodes = 0
         self.demo_steps = 0
         self.saved_milestones: set[int] = set()
         self.best_eval = (-1.0, float("inf"))
@@ -242,7 +243,13 @@ class Trainer:
                 ep[i]["ag"].append(terminal["achieved_goal"][i])
                 ep[i]["act"].append(actions[i])
                 ep[i]["shp"].append(infos[i]["shaping"])
-                if dones[i]:
+                ep[i]["bad"] = ep[i].get("bad", False) or bool(infos[i].get("unstable", False))
+                if dones[i] and ep[i]["bad"]:
+                    self.unstable_episodes += 1  # a physics blow-up: never let it into the buffer or the normalisers
+                    if self.unstable_episodes in (1, 10, 100) or self.unstable_episodes % 1000 == 0:
+                        self.log(f"[warn] {self.unstable_episodes} episode(s) discarded because the simulation diverged")
+                    ep[i] = self._new_episode(next_obs, i)
+                elif dones[i]:
                     e = ep[i]
                     self._add_episode(np.stack(e["obs"]), np.stack(e["ag"]), e["goal"], np.stack(e["act"]).astype(np.float32), np.array(e["shp"], np.float32))
                     self.episodes += 1
@@ -285,6 +292,7 @@ class Trainer:
             "task": cfg.env.task.name,
             "total_steps": self.steps,
             "episodes": self.episodes,
+            "unstable_episodes_discarded": self.unstable_episodes,
             "demo_steps": self.demo_steps,
             "wall_time_s": round(time.time() - t0, 1),
             "device": str(self.device),
