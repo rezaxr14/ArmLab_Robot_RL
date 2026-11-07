@@ -179,6 +179,61 @@ Run: 200,000 environment steps (1,916 episodes) in 127 min on `cuda`, plus 60,88
 
 </details>
 
+### Pick and place (cluttered)
+
+The same grasp-and-place task in the hard scene: a walled tray as the place target, two loose distractor cubes that can be knocked around, and full domain randomisation.
+
+**Untrained policy: 0% success. After 250,000 steps: 23%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 29.0 cm).
+
+![pickplace_clutter progression](docs/media/pickplace_clutter/progression.gif)
+
+*One continuous clip: the same start/goal seeds replayed by policy snapshots from step 0 to the end of training.*
+
+![pickplace_clutter stages, end of episode](docs/media/pickplace_clutter/stages_end.png)
+
+![pickplace_clutter stages, mid episode](docs/media/pickplace_clutter/stages_mid.png)
+
+| snapshot (env steps) | stage | success | mean final distance |
+|--:|:--|--:|--:|
+| 0 | untrained | 0% | 30.7 cm |
+| 5,000 | 2% of training | 0% | 30.8 cm |
+| 25,000 | 10% of training | 0% | 38.7 cm |
+| 87,500 | 35% of training | 13% | 27.3 cm |
+| 250,000 | final | 23% | 29.0 cm |
+
+*Each snapshot row is 30 held-out episodes: one success rate carries about +/-8 points (1 standard error).*
+
+
+![pickplace_clutter learning curve](docs/media/pickplace_clutter/learning_curve.png)
+
+![pickplace_clutter snapshot success](docs/media/pickplace_clutter/stage_success.png)
+
+Run: 250,000 environment steps (1,929 episodes) in 137 min on `cuda`, plus 63,810 scripted demonstration steps.
+
+<details><summary>Per-snapshot clips</summary>
+
+**0 steps (untrained)** - `hero` camera, 0% success
+
+![](docs/media/pickplace_clutter/stage_000000000_hero.gif)
+
+**5,000 steps (2% of training)** - `hero` camera, 0% success
+
+![](docs/media/pickplace_clutter/stage_000005000_hero.gif)
+
+**25,000 steps (10% of training)** - `hero` camera, 0% success
+
+![](docs/media/pickplace_clutter/stage_000025000_hero.gif)
+
+**87,500 steps (35% of training)** - `hero` camera, 13% success
+
+![](docs/media/pickplace_clutter/stage_000087500_hero.gif)
+
+**250,000 steps (final)** - `hero` camera, 23% success
+
+![](docs/media/pickplace_clutter/stage_000250000_hero.gif)
+
+</details>
+
 ## The robot and the physics
 
 ![scene gallery](docs/media/scene_gallery.png)
