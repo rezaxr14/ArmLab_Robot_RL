@@ -18,7 +18,56 @@ The whole project is driven from one notebook - [`notebooks/armforge_control_pan
 
 Move the Robotiq pinch point to a random 3D goal in the air. The warm-up task: it proves the controller, the contact-free dynamics and the learning stack work before objects are involved.
 
-> *No published run for `reach` yet - run the notebook's **Publish** cell to generate the media here.*
+**Untrained policy: 0% success. After 60,000 steps: 100%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 0.5 cm).
+
+![reach progression](docs/media/reach/progression.gif)
+
+*One continuous clip: the same start/goal seeds replayed by policy snapshots from step 0 to the end of training.*
+
+![reach stages, end of episode](docs/media/reach/stages_end.png)
+
+![reach stages, mid episode](docs/media/reach/stages_mid.png)
+
+| snapshot (env steps) | stage | success | mean final distance |
+|--:|:--|--:|--:|
+| 0 | untrained | 0% | 23.7 cm |
+| 1,200 | 2% of training | 0% | 30.8 cm |
+| 6,000 | 10% of training | 97% | 0.7 cm |
+| 21,000 | 35% of training | 100% | 0.5 cm |
+| 60,000 | final | 100% | 0.5 cm |
+
+*Each snapshot row is 30 held-out episodes: one success rate carries about +/-0 points (1 standard error).*
+
+
+![reach learning curve](docs/media/reach/learning_curve.png)
+
+![reach snapshot success](docs/media/reach/stage_success.png)
+
+Run: 60,000 environment steps (1,200 episodes) in 44 min on `cuda`.
+
+<details><summary>Per-snapshot clips</summary>
+
+**0 steps (untrained)** - `hero` camera, 0% success
+
+![](docs/media/reach/stage_000000000_hero.gif)
+
+**1,200 steps (2% of training)** - `hero` camera, 0% success
+
+![](docs/media/reach/stage_000001200_hero.gif)
+
+**6,000 steps (10% of training)** - `hero` camera, 97% success
+
+![](docs/media/reach/stage_000006000_hero.gif)
+
+**21,000 steps (35% of training)** - `hero` camera, 100% success
+
+![](docs/media/reach/stage_000021000_hero.gif)
+
+**60,000 steps (final)** - `hero` camera, 100% success
+
+![](docs/media/reach/stage_000060000_hero.gif)
+
+</details>
 
 ### Push
 
