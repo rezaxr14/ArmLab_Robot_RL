@@ -84,7 +84,7 @@ def compare_poses(label: str, qs: Sequence[np.ndarray], cpu_fk: PoseFn, ref_fk: 
 
 def cpu_fk_fn(kin: XmlKinematics, joint_names: Sequence[str], sites: Sequence[str]) -> PoseFn:
     def fk(q: np.ndarray):
-        poses = kin.forward(dict(zip(joint_names, np.asarray(q, float))))
+        poses = kin.forward(dict(zip(joint_names, np.asarray(q, float), strict=False)))
         return {s: poses[s] for s in sites}
 
     return fk
@@ -165,7 +165,7 @@ def compare_trajectory(cfg: EnvConfig, episodes: int = 3, seed: int = 1_000_000,
         # reference: MuJoCo evaluated on the same joint vectors (not the live state, so it is a pure FK comparison)
         ref = mujoco_fk_fn(env.model, env._scratch, ARM_JOINTS, sites)
         report = compare_poses(f"{episodes} expert episode(s), every visited state", qs, cpu, ref, sites)
-        gap = max((np.linalg.norm(cpu(q)[TOOL_SITE][0] - p) for q, p in zip(qs, env_ee)), default=0.0) * 1e3
+        gap = max((np.linalg.norm(cpu(q)[TOOL_SITE][0] - p) for q, p in zip(qs, env_ee, strict=False)), default=0.0) * 1e3
         return report, float(gap)
     finally:
         env.close()

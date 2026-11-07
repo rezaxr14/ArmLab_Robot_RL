@@ -35,14 +35,14 @@ class QuantileCritic(nn.Module):
         super().__init__()
         self.ensemble, self.n_quantiles = ensemble, n_quantiles
         dims = (in_dim + act_dim, *hidden)
-        self.layers = nn.ModuleList([EnsembleLinear(ensemble, a, b) for a, b in zip(dims[:-1], dims[1:])])
+        self.layers = nn.ModuleList([EnsembleLinear(ensemble, a, b) for a, b in zip(dims[:-1], dims[1:], strict=False)])
         self.norms = nn.ModuleList([nn.LayerNorm(b) if layer_norm else nn.Identity() for b in dims[1:]])
         self.head = EnsembleLinear(ensemble, dims[-1], n_quantiles)
 
     def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """Returns quantiles ``[B, E, N]``."""
         x = torch.cat([state, action], dim=-1).unsqueeze(0).expand(self.ensemble, -1, -1)
-        for layer, norm in zip(self.layers, self.norms):
+        for layer, norm in zip(self.layers, self.norms, strict=False):
             x = F.relu(norm(layer(x)))
         return self.head(x).permute(1, 0, 2)
 
@@ -52,7 +52,7 @@ class TanhGaussianActor(nn.Module):
         super().__init__()
         dims = (in_dim, *hidden)
         blocks: list[nn.Module] = []
-        for a, b in zip(dims[:-1], dims[1:]):
+        for a, b in zip(dims[:-1], dims[1:], strict=False):
             blocks.append(nn.Linear(a, b))
             if layer_norm:
                 blocks.append(nn.LayerNorm(b))

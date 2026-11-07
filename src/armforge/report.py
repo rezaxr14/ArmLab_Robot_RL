@@ -14,7 +14,17 @@ from pathlib import Path
 import numpy as np
 
 from .config import EVAL_SEED_BASE, RunConfig, load_config
-from .media import caption, filmstrip, load_policy, make_env, pick_frames, record_episode, hold, write_gif, write_mp4
+from .media import (
+    caption,
+    filmstrip,
+    hold,
+    load_policy,
+    make_env,
+    pick_frames,
+    record_episode,
+    write_gif,
+    write_mp4,
+)
 
 # Reference categorical palette (validated: first three slots pass all-pairs CVD/normal-vision gates).
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
@@ -38,6 +48,9 @@ def render_task_media(run_dir: str | Path, out_dir: str | Path, cameras=("hero",
     snaps = sorted((run_dir / "milestones").glob("step_*.pt"))
     if not snaps:
         raise FileNotFoundError(f"no milestone snapshots in {run_dir / 'milestones'}")
+    # The last snapshot in the directory is the final published policy (normally the end of
+    # training; for a "best checkpoint" publish run it is the best evaluated snapshot).
+    final_step = int(snaps[-1].stem.split("_")[1])
     out_dir.mkdir(parents=True, exist_ok=True)
     env = make_env(cfg)
     task = cfg.env.task.name
@@ -51,7 +64,7 @@ def render_task_media(run_dir: str | Path, out_dir: str | Path, cameras=("hero",
             agent = load_policy(snap, cfg, device)
             act = lambda o, a=agent: a.act(o["observation"], o["desired_goal"], deterministic=True)  # noqa: E731
             stats = evaluate_policy(cfg.env, act, stats_episodes, seed0=EVAL_SEED_BASE, goal_scale=1.0, env=env)
-            label = stage_label(step, total)
+            label = "final" if step == final_step else stage_label(step, total)
             title = f"{task} | {step:,} steps ({label})"
             sub = f"eval success {stats['success_rate']:.0%}"
             log(f"[media] {task} step {step:,}: success {stats['success_rate']:.2f} over {stats_episodes} episodes")
@@ -60,7 +73,7 @@ def render_task_media(run_dir: str | Path, out_dir: str | Path, cameras=("hero",
                 stage_frames: list[np.ndarray] = []
                 for k in range(clips_per_stage):
                     clip = record_episode(env, act, EVAL_SEED_BASE + k, cam, size, render_every)
-                    cap = [caption(f, title, sub, d, s, thr) for f, d, s in zip(clip["frames"], clip["dist"], clip["success"])]
+                    cap = [caption(f, title, sub, d, s, thr) for f, d, s in zip(clip["frames"], clip["dist"], clip["success"], strict=False)]
                     stage_frames += hold(cap, 4)
                     if k == 0 and cam == cameras[0]:
                         finals.append((cap[-1], f"{step:,} steps - {stats['success_rate']:.0%}"))
@@ -167,7 +180,7 @@ def plot_stage_success(manifest: dict, out_png: str | Path) -> Path:
     xs = np.arange(len(stages))
     vals = [s["success_rate"] for s in stages]
     ax.bar(xs, vals, width=0.5, color=BLUE)
-    for x, v in zip(xs, vals):
+    for x, v in zip(xs, vals, strict=False):
         ax.text(x, v + 0.025, f"{v:.0%}", ha="center", color=INK, fontsize=10)
     ax.set_xticks(xs, [f"{s['step'] / 1000:g}k" if s["step"] else "0" for s in stages])
     ax.set_ylim(0, 1.12)
@@ -227,7 +240,7 @@ def plot_comparison(run_dirs: list[str | Path], labels: list[str], out_png: str 
         raise ValueError("plot_comparison supports at most 3 runs (validated categorical slots)")
     fig, ax = plt.subplots(figsize=(8.5, 4.2), facecolor=SURFACE)
     _style(ax)
-    for rd, lab, col in zip(run_dirs, labels, colors):
+    for rd, lab, col in zip(run_dirs, labels, colors, strict=False):
         rows = [r for r in read_metrics(Path(rd) / "metrics.csv") if r.get("eval_success") is not None]
         ax.plot([r["steps"] for r in rows], [r["eval_success"] for r in rows], color=col, lw=2, label=lab)
     ax.set_ylim(-0.02, 1.02)

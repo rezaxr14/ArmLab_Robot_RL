@@ -114,7 +114,7 @@ def filmstrip(images: list[np.ndarray], labels: list[str], path: str | Path, lab
     canvas = Image.new("RGB", (w * len(images) + 4 * (len(images) - 1), h + label_height), (252, 252, 251))
     d = ImageDraw.Draw(canvas)
     font = _font(15)
-    for i, (img, lab) in enumerate(zip(images, labels)):
+    for i, (img, lab) in enumerate(zip(images, labels, strict=False)):
         x = i * (w + 4)
         canvas.paste(Image.fromarray(img), (x, 0))
         d.text((x + 8, h + 8), lab, fill=(30, 30, 30), font=font)

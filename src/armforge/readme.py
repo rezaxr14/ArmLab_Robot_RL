@@ -99,9 +99,10 @@ def _results_for(task: str, media_root: Path) -> str:
     stages = manifest["stages"]
     first, last = stages[0], stages[-1]
     out += [
-        f"**Untrained policy: {first['success_rate']:.0%} success. After {last['step']:,} steps: {last['success_rate']:.0%}** "
-        f"(deterministic policy, {last['episodes']} held-out episodes at the *full* goal range, mean final goal distance "
-        f"{last['mean_final_distance'] * 100:.1f} cm).",
+        f"**Untrained policy: {first['success_rate']:.0%} success. Best evaluated policy: {last['success_rate']:.0%} at "
+        f"{last['step']:,} steps** (deterministic policy, {last['episodes']} held-out episodes at the *full* goal range, mean "
+        f"final goal distance {last['mean_final_distance'] * 100:.1f} cm). The published checkpoint is the best evaluation "
+        f"of the run; the learning curve below shows the complete training history, including any later regression.",
         "",
         f"![{task} progression]({rel}/progression.gif)",
         "",
@@ -182,7 +183,7 @@ def top_section(media_root: str | Path = "docs/media") -> str:
     parts += [
         "## The robot and the physics",
         "",
-        (f"![scene gallery](docs/media/scene_gallery.png)\n" if gallery.exists() else "*Scene gallery: written to `docs/media/scene_gallery.png` by the notebook's Media cell or `armforge scene`.*\n"),
+        ("![scene gallery](docs/media/scene_gallery.png)\n" if gallery.exists() else "*Scene gallery: written to `docs/media/scene_gallery.png` by the notebook's Media cell or `armforge scene`.*\n"),
         "The scene is generated programmatically ([`scene.py`](src/armforge/scene.py)) from the pinned Menagerie models: the UR5e and 2F-85 XML are "
         "merged (names, classes, meshes and contact exclusions are namespaced), the gripper is mounted on the flange, and a table, optional walled "
         "tray, free cubes, a mocap goal marker and five cameras are added. The meshes are downloaded once into a cache (about 45 MB), not vendored.",
@@ -214,7 +215,7 @@ def top_section(media_root: str | Path = "docs/media") -> str:
         "",
         "## Run it",
         "",
-        f"**Colab (GPU):** open the badge above, `Runtime -> Change runtime type -> GPU`, then *Run all* and edit the form fields in the *Configure* cell.",
+        "**Colab (GPU):** open the badge above, `Runtime -> Change runtime type -> GPU`, then *Run all* and edit the form fields in the *Configure* cell.",
         "",
         "**Local:**",
         "",

@@ -57,7 +57,7 @@ def test_home_pose_tool_points_down(robot):
     from armforge.scene import ARM_JOINTS, HOME_QPOS, TOOL_SITE
 
     _, kin = robot
-    pos, R = kin.site_pose(TOOL_SITE, dict(zip(ARM_JOINTS, HOME_QPOS)))
+    pos, R = kin.site_pose(TOOL_SITE, dict(zip(ARM_JOINTS, HOME_QPOS, strict=False)))
     assert np.allclose(R[:, 2], [0, 0, -1], atol=1e-3), "gripper approach axis should point down at home"
     assert np.allclose(pos, [0.492, 0.134, 0.3322], atol=2e-3)
 

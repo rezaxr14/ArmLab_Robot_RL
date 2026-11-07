@@ -20,9 +20,8 @@ API (deliberately tiny):
 
 from __future__ import annotations
 
-import numpy as np
-
 import mujoco
+import numpy as np
 
 from ..config import EnvConfig
 from ..scene import (

@@ -139,7 +139,7 @@ class SACAgent:
 
         # ---- target network ----
         with torch.no_grad():
-            for p, tp in zip(self.critic.parameters(), self.critic_target.parameters()):
+            for p, tp in zip(self.critic.parameters(), self.critic_target.parameters(), strict=False):
                 tp.lerp_(p, cfg.tau)
         self.updates += 1
         return {

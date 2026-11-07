@@ -1,6 +1,14 @@
 import pytest
 
-from armforge.config import RunConfig, apply_overrides, deep_merge, from_dict, load_config, save_config, to_dict
+from armforge.config import (
+    RunConfig,
+    apply_overrides,
+    deep_merge,
+    from_dict,
+    load_config,
+    save_config,
+    to_dict,
+)
 
 
 def test_defaults_roundtrip(tmp_path):

@@ -17,7 +17,9 @@ while read -r run out; do
   if [ -f "runs/$run/final.pt" ] && [ -d "runs/$run/milestones" ] && [ -n "$(ls -A "runs/$run/milestones" 2>/dev/null)" ]; then
     echo "  -> $run => docs/media/$out"
     rm -rf "docs/media/$out"
-    $PY -m armforge publish --run "runs/$run" --out-name "$out" --cameras hero --clips 2 --episodes 30
+    if ! $PY -m armforge publish --run "runs/$run" --out-name "$out" --cameras hero --clips 2 --episodes 30; then
+      echo "  !! publish failed for $run (keeping the other results)"
+    fi
   else
     echo "  -- skip $run (not finished)"
   fi

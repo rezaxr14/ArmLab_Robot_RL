@@ -142,7 +142,7 @@ class XmlKinematics:
         """World pose ``(position, rotation_matrix)`` of every site for joint values ``qpos``."""
         transforms = self._transforms(qpos)
         sites: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-        for b, T in zip(self._bodies, transforms):
+        for b, T in zip(self._bodies, transforms, strict=False):
             for name, (pos, quat) in b["sites"].items():
                 S = np.eye(4)
                 S[:3, :3] = quat_to_mat(quat)
@@ -154,7 +154,7 @@ class XmlKinematics:
     def body_pose(self, name: str, qpos: dict[str, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
         """World pose ``(position, rotation_matrix)`` of a named body."""
         transforms = self._transforms(qpos)
-        for b, T in zip(self._bodies, transforms):
+        for b, T in zip(self._bodies, transforms, strict=False):
             if b["name"] == name:
                 return T[:3, 3].copy(), T[:3, :3].copy()
         raise KeyError(f"no body named {name!r}")
@@ -183,7 +183,7 @@ class XmlKinematics:
         q = np.asarray(q0, dtype=float).copy()
         target_pos = np.asarray(target_pos, float)
         for _ in range(iterations):
-            pos, R = self.site_pose(site, dict(zip(joint_names, q)))
+            pos, R = self.site_pose(site, dict(zip(joint_names, q, strict=False)))
             err = np.concatenate([target_pos - pos, rotation_error(R, target_rot)])
             if np.linalg.norm(err[:3]) < 1e-5 and np.linalg.norm(err[3:]) < 1e-4:
                 break
@@ -192,7 +192,7 @@ class XmlKinematics:
             for i in range(len(q)):
                 dq = q.copy()
                 dq[i] += eps
-                p2, R2 = self.site_pose(site, dict(zip(joint_names, dq)))
+                p2, R2 = self.site_pose(site, dict(zip(joint_names, dq, strict=False)))
                 J[:3, i] = (p2 - pos) / eps
                 # world-frame angular velocity from the rotation difference
                 dR = R2 @ R.T
@@ -203,5 +203,5 @@ class XmlKinematics:
                 for i, name in enumerate(joint_names):
                     lo, hi = limits.get(name, (-np.inf, np.inf))
                     q[i] = float(np.clip(q[i], lo, hi))
-        pos, R = self.site_pose(site, dict(zip(joint_names, q)))
+        pos, R = self.site_pose(site, dict(zip(joint_names, q, strict=False)))
         return q, float(np.linalg.norm(target_pos - pos)), float(np.linalg.norm(rotation_error(R, target_rot)))

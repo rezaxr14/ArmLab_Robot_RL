@@ -1,6 +1,5 @@
 """Simulator tests (need `mujoco` and the Menagerie assets)."""
 
-from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -92,7 +91,7 @@ def test_compute_reward_matches_step_and_is_vectorised(reach):
 
 def test_cube_rests_on_table_and_pads_not_touching(menagerie):
     env = make(menagerie, task={"name": "pickplace", "horizon": 10})
-    obs = env.reset(seed=0)
+    env.reset(seed=0)
     for _ in range(10):
         env.step(np.array([0, 0, 0, -1.0]))
     cube = env.object_pos("cube")

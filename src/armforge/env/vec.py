@@ -34,7 +34,7 @@ class SyncVecEnv:
 
     def reset(self, seeds=None, goal_scale=None):
         seeds = seeds if seeds is not None else [None] * self.num_envs
-        return _stack([e.reset(seed=s, goal_scale=goal_scale) for e, s in zip(self.envs, seeds)])
+        return _stack([e.reset(seed=s, goal_scale=goal_scale) for e, s in zip(self.envs, seeds, strict=False)])
 
     def set_goal_scale(self, scale: float):
         for e in self.envs:
@@ -42,7 +42,7 @@ class SyncVecEnv:
 
     def step(self, actions):
         obs, rews, dones, infos, terminal = [], [], [], [], []
-        for e, a in zip(self.envs, actions):
+        for e, a in zip(self.envs, actions, strict=False):
             o, r, d, info = e.step(a)
             terminal.append(o)
             if d:
@@ -105,7 +105,7 @@ class SubprocVecEnv:
 
     def reset(self, seeds=None, goal_scale=None):
         seeds = seeds if seeds is not None else [None] * self.num_envs
-        for r, s in zip(self.remotes, seeds):
+        for r, s in zip(self.remotes, seeds, strict=False):
             r.send(("reset", (s, goal_scale)))
         return _stack([r.recv() for r in self.remotes])
 
@@ -116,10 +116,10 @@ class SubprocVecEnv:
             r.recv()
 
     def step(self, actions):
-        for r, a in zip(self.remotes, actions):
+        for r, a in zip(self.remotes, actions, strict=False):
             r.send(("step", a))
         results = [r.recv() for r in self.remotes]
-        obs, rews, dones, infos, terminal = zip(*results)
+        obs, rews, dones, infos, terminal = zip(*results, strict=False)
         return _stack(obs), np.array(rews, np.float32), np.array(dones), list(infos), _stack(terminal)
 
     def close(self):
