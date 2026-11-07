@@ -73,7 +73,56 @@ Run: 60,000 environment steps (1,200 episodes) in 44 min on `cuda`.
 
 Slide a free 40 mm cube to a goal on the table with the **closed** gripper held 2 cm above the surface. The cube is moved only by contact friction, so sliding, torsional and rolling friction decide whether a push goes straight, spins the cube or tips it.
 
-> *No published run for `push` yet - run the notebook's **Publish** cell to generate the media here.*
+**Untrained policy: 0% success. After 200,000 steps: 43%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 22.5 cm).
+
+![push progression](docs/media/push/progression.gif)
+
+*One continuous clip: the same start/goal seeds replayed by policy snapshots from step 0 to the end of training.*
+
+![push stages, end of episode](docs/media/push/stages_end.png)
+
+![push stages, mid episode](docs/media/push/stages_mid.png)
+
+| snapshot (env steps) | stage | success | mean final distance |
+|--:|:--|--:|--:|
+| 0 | untrained | 0% | 16.3 cm |
+| 4,000 | 2% of training | 3% | 15.6 cm |
+| 20,000 | 10% of training | 27% | 14.8 cm |
+| 70,000 | 35% of training | 57% | 7.2 cm |
+| 200,000 | final | 43% | 22.5 cm |
+
+*Each snapshot row is 30 held-out episodes: one success rate carries about +/-9 points (1 standard error).*
+
+
+![push learning curve](docs/media/push/learning_curve.png)
+
+![push snapshot success](docs/media/push/stage_success.png)
+
+Run: 200,000 environment steps (2,287 episodes) in 127 min on `cuda`, plus 19,740 scripted demonstration steps.
+
+<details><summary>Per-snapshot clips</summary>
+
+**0 steps (untrained)** - `hero` camera, 0% success
+
+![](docs/media/push/stage_000000000_hero.gif)
+
+**4,000 steps (2% of training)** - `hero` camera, 3% success
+
+![](docs/media/push/stage_000004000_hero.gif)
+
+**20,000 steps (10% of training)** - `hero` camera, 27% success
+
+![](docs/media/push/stage_000020000_hero.gif)
+
+**70,000 steps (35% of training)** - `hero` camera, 57% success
+
+![](docs/media/push/stage_000070000_hero.gif)
+
+**200,000 steps (final)** - `hero` camera, 43% success
+
+![](docs/media/push/stage_000200000_hero.gif)
+
+</details>
 
 ### Pick and place
 
