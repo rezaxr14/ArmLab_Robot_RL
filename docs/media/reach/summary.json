@@ -1,0 +1,25 @@
+{
+  "name": "reach-s0",
+  "task": "reach",
+  "total_steps": 60000,
+  "episodes": 1200,
+  "unstable_episodes_discarded": 0,
+  "demo_steps": 0,
+  "wall_time_s": 2635.4,
+  "device": "cuda",
+  "final_eval": {
+    "success_rate": 1.0,
+    "ever_success_rate": 1.0,
+    "mean_final_distance": 0.004671859968220815,
+    "mean_return": -5.75,
+    "episodes": 20
+  },
+  "best_eval_success": 1.0,
+  "milestones": [
+    0,
+    1200,
+    6000,
+    21000,
+    60000
+  ]
+}
