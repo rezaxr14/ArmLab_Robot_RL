@@ -1,0 +1,25 @@
+{
+  "name": "pickplace_clutter-s0",
+  "task": "pickplace",
+  "total_steps": 250000,
+  "episodes": 1929,
+  "unstable_episodes_discarded": 847,
+  "demo_steps": 63810,
+  "wall_time_s": 8202.5,
+  "device": "cuda",
+  "final_eval": {
+    "success_rate": 0.1,
+    "ever_success_rate": 0.2,
+    "mean_final_distance": 0.3484108111821115,
+    "mean_return": -82.05,
+    "episodes": 20
+  },
+  "best_eval_success": 0.35,
+  "milestones": [
+    0,
+    5000,
+    25000,
+    87500,
+    250000
+  ]
+}
