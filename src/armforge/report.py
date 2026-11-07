@@ -243,12 +243,16 @@ def plot_comparison(run_dirs: list[str | Path], labels: list[str], out_png: str 
     return out_png
 
 
-def publish_task(run_dir: str | Path, repo_root: str | Path, cameras=("hero",), clips_per_stage: int = 2, stats_episodes: int = 30, log=print) -> dict:
-    """Render media + plots for one run into ``docs/media/<task>/`` and return its manifest."""
+def publish_task(run_dir: str | Path, repo_root: str | Path, cameras=("hero",), clips_per_stage: int = 2, stats_episodes: int = 30, out_name: str | None = None, log=print) -> dict:
+    """Render media + plots for one run into ``docs/media/<task>/`` and return its manifest.
+
+    ``out_name`` overrides the directory (used by the cluttered variant, whose task is still
+    ``pickplace`` but whose results belong in ``docs/media/pickplace_clutter``).
+    """
     run_dir, repo_root = Path(run_dir), Path(repo_root)
     cfg = load_config(run_dir / "config.yaml")
     task = cfg.env.task.name
-    out = repo_root / "docs" / "media" / task
+    out = repo_root / "docs" / "media" / (out_name or task)
     manifest = render_task_media(run_dir, out, cameras=cameras, clips_per_stage=clips_per_stage, stats_episodes=stats_episodes, log=log)
     plot_learning_curves(run_dir, out / "learning_curve.png", milestones=[s["step"] for s in manifest["stages"]])
     plot_stage_success(manifest, out / "stage_success.png")

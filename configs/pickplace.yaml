@@ -7,9 +7,12 @@ env:
   physics:
     randomize: {enabled: true}
 train:
-  total_steps: 2500000
+  total_steps: 200000
   num_envs: 4
   buffer_episodes: 32000
-  eval_every: 50000
+  eval_every: 25000
+  log_every: 5000
   milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
-  demos: {episodes: 300, bc_steps: 2500}
+  # The scripted expert solves this task ~100%; a larger, well-cloned demo set gives the
+  # policy a strong starting point, so the RL phase mainly refines it with HER.
+  demos: {episodes: 800, bc_steps: 8000}

@@ -27,13 +27,26 @@ class ReachExpert:
 
 
 class PushExpert:
-    """Get behind the cube on the far side from the goal (going around it), then push straight."""
+    """Get behind the cube on the far side from the goal (going around it), then push straight.
+
+    The cube is light (80 g) and the arm servos are stiff, so contacting it at full speed launches
+    it off the table. The expert therefore approaches cautiously near the cube and pushes in small
+    increments, braking as the goal gets close.
+    """
 
     def __init__(self, env, standoff: float = 0.065):
         self.env, self.standoff = env, standoff
 
     def reset(self) -> None:
         pass
+
+    @staticmethod
+    def _capped(err: np.ndarray, step: float, cap: float) -> np.ndarray:
+        """Proportional action whose commanded displacement is at most ``cap`` metres."""
+        norm = float(np.linalg.norm(err))
+        if norm > cap:
+            err = err * (cap / norm)
+        return _p_action(err, step)
 
     def act(self) -> np.ndarray:
         e = self.env
@@ -48,17 +61,25 @@ class PushExpert:
         rel = ee - obj
         along, lateral = float(rel @ u), float(rel @ n)
         behind = obj - self.standoff * u
-        if along < -0.03 and abs(lateral) < 0.025:
-            # lined up behind the cube: push, correcting sideways drift
-            return _p_action(u * 0.03 - n * lateral * 0.6, step)
-        if along > -0.03:
-            # on the wrong side or beside it: swing wide around the cube first
+        if dist <= 0.5 * e.cfg.task.success_threshold:
+            # close enough to the goal: stop pushing, or the cube overshoots past the hand's reach
+            return np.zeros(2)
+        if along < -0.03 and abs(lateral) < 0.02:
+            # lined up behind the cube: push gently, correcting sideways drift
+            push = min(0.008, max(0.0, dist - 0.01))
+            return self._capped(u * push - n * lateral * 0.3, step, 0.008)
+        if along > -0.03 and abs(lateral) < 0.05:
+            # on the wrong side or on the cube's line: swing out sideways first. Once the hand is
+            # already off to the side (|lateral| >= 0.05) heading straight for the stand-off point
+            # is safe - and moving to the swing waypoint again would deadlock there (err == 0).
             side = 1.0 if lateral >= 0 else -1.0
-            waypoint = obj + n * side * 0.10 - u * 0.02
-            if along < -0.08:
-                waypoint = behind
-            return _p_action(waypoint - ee, step)
-        return _p_action(behind - ee, step)
+            target = obj + n * side * 0.10 - u * 0.02
+        else:
+            target = behind
+        err = target - ee
+        # near the cube, creep; far away, move at normal speed
+        cap = 0.008 if np.linalg.norm(ee - obj) < 0.09 else 0.025
+        return self._capped(err, step, cap)
 
 
 class PickPlaceExpert:

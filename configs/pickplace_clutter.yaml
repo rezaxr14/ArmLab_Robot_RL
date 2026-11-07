@@ -8,9 +8,12 @@ env:
   physics:
     randomize: {enabled: true, action_noise: 0.05}
 train:
-  total_steps: 3500000
+  total_steps: 250000
   num_envs: 4
   buffer_episodes: 40000
-  eval_every: 50000
+  eval_every: 25000
+  log_every: 5000
   milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
-  demos: {episodes: 400, bc_steps: 3000}
+  # The scripted expert solves the cluttered scene ~87%; clone a large demo set and then let
+  # HER fine-tune the grasp/place policy.
+  demos: {episodes: 800, bc_steps: 8000}

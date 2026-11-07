@@ -67,6 +67,13 @@ def _clip_xy_into_workspace(env, xy: np.ndarray, margin: float = 0.02) -> np.nda
     )
 
 
+def _inside_workspace(env, xy: np.ndarray, margin: float = 0.0) -> bool:
+    """True if ``xy`` is inside the Cartesian workspace the controller clamps the hand to."""
+    cx, cy = env.layout.workspace_center
+    hx, hy = env.cfg.task.workspace_half_extent
+    return (cx - hx + margin <= xy[0] <= cx + hx - margin) and (cy - hy + margin <= xy[1] <= cy + hy - margin)
+
+
 class ReachTask(Task):
     name = "reach"
     action_dim = 3
@@ -178,6 +185,10 @@ class PushTask(_ObjectTask):
     action_dim = 2
     grip_closed_at_start = True
 
+    # The pusher has to get *behind* the cube, on the far side from the goal. If that stand-off
+    # point is outside the hand's workspace the goal is unreachable, so we reject such goals.
+    APPROACH_STANDOFF = 0.10
+
     def __init__(self, lock_z: float = 0.02):
         self.lock_z = float(lock_z)
 
@@ -190,17 +201,32 @@ class PushTask(_ObjectTask):
     def reset_scene(self, env, goal_scale: float) -> None:
         t = env.cfg.task
         h = env.layout.object_half_size
+        cx, cy = env.layout.workspace_center
         obj_xy = self._place_objects(env)
         # keep the start of the pusher clear of the cube (it is placed by IK before the cube)
         start = np.array([obj_xy[0], obj_xy[1], h])
-        for _ in range(30):
+        goal = start.copy()
+        for _ in range(60):
             ang = env.rng.uniform(-np.pi, np.pi)
             radius = env.rng.uniform(t.min_goal_distance, 0.26)
             xy = _clip_xy_into_workspace(env, obj_xy + radius * np.array([np.cos(ang), np.sin(ang)]))
             full = np.array([xy[0], xy[1], h])
+            candidate = self._interpolate_goal(env, start, full, goal_scale)
+            delta = candidate[:2] - obj_xy
+            dist = float(np.linalg.norm(delta))
+            if dist < t.min_goal_distance:
+                continue
+            behind = obj_xy - self.APPROACH_STANDOFF * (delta / dist)
+            if not _inside_workspace(env, behind, margin=0.005):
+                continue
+            goal = candidate
+            break
+        else:
+            # Degenerate fallback: push along x towards the middle of the workspace. The stand-off
+            # point then moves inwards, so this is always reachable.
+            direction = 1.0 if obj_xy[0] <= cx else -1.0
+            full = np.array([min(max(obj_xy[0] + direction * t.min_goal_distance, cx - t.workspace_half_extent[0] + 0.02), cx + t.workspace_half_extent[0] - 0.02), obj_xy[1], h])
             goal = self._interpolate_goal(env, start, full, goal_scale)
-            if np.linalg.norm(goal[:2] - obj_xy) >= t.min_goal_distance:
-                break
         env.goal = goal
         env.place_goal_marker(goal)
 

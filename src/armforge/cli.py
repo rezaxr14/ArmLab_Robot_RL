@@ -141,7 +141,7 @@ def cmd_eval(args) -> int:
 def cmd_publish(args) -> int:
     from .report import publish_task
 
-    manifest = publish_task(args.run, args.repo, cameras=tuple(args.cameras), clips_per_stage=args.clips, stats_episodes=args.episodes)
+    manifest = publish_task(args.run, args.repo, cameras=tuple(args.cameras), clips_per_stage=args.clips, stats_episodes=args.episodes, out_name=args.out_name)
     print(json.dumps({k: manifest[k] for k in ("task", "run", "total_steps")}, indent=2))
     return cmd_readme(argparse.Namespace(repo=args.repo))
 
@@ -258,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cameras", nargs="+", default=["hero"])
     p.add_argument("--clips", type=int, default=2)
     p.add_argument("--episodes", type=int, default=30)
+    p.add_argument("--out-name", help="output directory under docs/media/ (default: the task name)")
     p.set_defaults(fn=cmd_publish)
 
     p = sub.add_parser("readme", help="regenerate README.md from docs/media and legacy/README.md")
