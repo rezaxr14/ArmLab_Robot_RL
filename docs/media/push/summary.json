@@ -1,0 +1,25 @@
+{
+  "name": "push-s0",
+  "task": "push",
+  "total_steps": 200000,
+  "episodes": 2287,
+  "unstable_episodes_discarded": 1045,
+  "demo_steps": 19740,
+  "wall_time_s": 7623.3,
+  "device": "cuda",
+  "final_eval": {
+    "success_rate": 0.3,
+    "ever_success_rate": 0.5,
+    "mean_final_distance": 0.2863497185070999,
+    "mean_return": -45.7,
+    "episodes": 20
+  },
+  "best_eval_success": 0.45,
+  "milestones": [
+    0,
+    4000,
+    20000,
+    70000,
+    200000
+  ]
+}

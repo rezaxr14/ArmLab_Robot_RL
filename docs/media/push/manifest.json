@@ -1,0 +1,57 @@
+{
+  "task": "push",
+  "run": "push-s0",
+  "total_steps": 200000,
+  "stages": [
+    {
+      "step": 0,
+      "label": "untrained",
+      "success_rate": 0.0,
+      "mean_final_distance": 0.16256148517131805,
+      "episodes": 30,
+      "files": {
+        "hero": "stage_000000000_hero.gif"
+      }
+    },
+    {
+      "step": 4000,
+      "label": "2% of training",
+      "success_rate": 0.03333333333333333,
+      "mean_final_distance": 0.15586902455737192,
+      "episodes": 30,
+      "files": {
+        "hero": "stage_000004000_hero.gif"
+      }
+    },
+    {
+      "step": 20000,
+      "label": "10% of training",
+      "success_rate": 0.26666666666666666,
+      "mean_final_distance": 0.14809570840249459,
+      "episodes": 30,
+      "files": {
+        "hero": "stage_000020000_hero.gif"
+      }
+    },
+    {
+      "step": 70000,
+      "label": "35% of training",
+      "success_rate": 0.5666666666666667,
+      "mean_final_distance": 0.07192799299955369,
+      "episodes": 30,
+      "files": {
+        "hero": "stage_000070000_hero.gif"
+      }
+    },
+    {
+      "step": 200000,
+      "label": "final",
+      "success_rate": 0.43333333333333335,
+      "mean_final_distance": 0.2245936628829688,
+      "episodes": 30,
+      "files": {
+        "hero": "stage_000200000_hero.gif"
+      }
+    }
+  ]
+}
