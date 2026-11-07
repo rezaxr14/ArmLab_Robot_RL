@@ -1,0 +1,25 @@
+{
+  "name": "pickplace-s0",
+  "task": "pickplace",
+  "total_steps": 200000,
+  "episodes": 1916,
+  "unstable_episodes_discarded": 584,
+  "demo_steps": 60880,
+  "wall_time_s": 7626.4,
+  "device": "cuda",
+  "final_eval": {
+    "success_rate": 0.35,
+    "ever_success_rate": 0.5,
+    "mean_final_distance": 0.39811225223820657,
+    "mean_return": -52.85,
+    "episodes": 20
+  },
+  "best_eval_success": 0.6,
+  "milestones": [
+    0,
+    4000,
+    20000,
+    70000,
+    200000
+  ]
+}

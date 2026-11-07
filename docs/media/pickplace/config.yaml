@@ -1,5 +1,5 @@
 name: pickplace-s0
-out_dir: /content/drive/MyDrive/armforge_runs
+out_dir: runs
 env:
   physics:
     timestep: 0.002
@@ -109,12 +109,12 @@ algo:
   obs_clip: 5.0
   action_l2: 0.0
 train:
-  total_steps: 2500000
+  total_steps: 200000
   num_envs: 4
   start_steps: 5000
   warmup_updates_after: 2000
   buffer_episodes: 32000
-  eval_every: 50000
+  eval_every: 25000
   eval_episodes: 20
   log_every: 5000
   checkpoint_every: 100000
@@ -135,9 +135,11 @@ train:
     step: 0.1
     window_episodes: 200
   demos:
-    episodes: 300
-    bc_steps: 2500
+    episodes: 800
+    bc_steps: 8000
     bc_batch_size: 512
     keep_only_successful: true
     noise_std: 0.1
   vec_backend: subprocess
+  save_buffer: true
+  resume_refill_episodes: 400

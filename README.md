@@ -128,7 +128,7 @@ Run: 200,000 environment steps (2,287 episodes) in 127 min on `cuda`, plus 19,74
 
 Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in the air, or (in the cluttered variant) inside a walled tray among loose distractor cubes. Needs a real grasp: pad friction, finger linkage compliance and grip force all matter.
 
-**Untrained policy: 0% success. After 875,000 steps: 60%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 12.9 cm).
+**Untrained policy: 0% success. After 200,000 steps: 37%** (deterministic policy, 30 held-out episodes at the *full* goal range, mean final goal distance 38.9 cm).
 
 ![pickplace progression](docs/media/pickplace/progression.gif)
 
@@ -141,9 +141,10 @@ Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in th
 | snapshot (env steps) | stage | success | mean final distance |
 |--:|:--|--:|--:|
 | 0 | untrained | 0% | 16.6 cm |
-| 50,000 | 2% of training | 37% | 17.8 cm |
-| 250,000 | 10% of training | 53% | 21.4 cm |
-| 875,000 | 35% of training | 60% | 12.9 cm |
+| 4,000 | 2% of training | 0% | 16.5 cm |
+| 20,000 | 10% of training | 30% | 14.2 cm |
+| 70,000 | 35% of training | 40% | 9.6 cm |
+| 200,000 | final | 37% | 38.9 cm |
 
 *Each snapshot row is 30 held-out episodes: one success rate carries about +/-9 points (1 standard error).*
 
@@ -152,23 +153,29 @@ Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in th
 
 ![pickplace snapshot success](docs/media/pickplace/stage_success.png)
 
+Run: 200,000 environment steps (1,916 episodes) in 127 min on `cuda`, plus 60,880 scripted demonstration steps.
+
 <details><summary>Per-snapshot clips</summary>
 
 **0 steps (untrained)** - `hero` camera, 0% success
 
 ![](docs/media/pickplace/stage_000000000_hero.gif)
 
-**50,000 steps (2% of training)** - `hero` camera, 37% success
+**4,000 steps (2% of training)** - `hero` camera, 0% success
 
-![](docs/media/pickplace/stage_000050000_hero.gif)
+![](docs/media/pickplace/stage_000004000_hero.gif)
 
-**250,000 steps (10% of training)** - `hero` camera, 53% success
+**20,000 steps (10% of training)** - `hero` camera, 30% success
 
-![](docs/media/pickplace/stage_000250000_hero.gif)
+![](docs/media/pickplace/stage_000020000_hero.gif)
 
-**875,000 steps (35% of training)** - `hero` camera, 60% success
+**70,000 steps (35% of training)** - `hero` camera, 40% success
 
-![](docs/media/pickplace/stage_000875000_hero.gif)
+![](docs/media/pickplace/stage_000070000_hero.gif)
+
+**200,000 steps (final)** - `hero` camera, 37% success
+
+![](docs/media/pickplace/stage_000200000_hero.gif)
 
 </details>
 
