@@ -5,7 +5,7 @@ env:
   seed: 0
   task: {name: reach, horizon: 50, success_threshold: 0.03}
 train:
-  total_steps: 300000
+  total_steps: 60000
   num_envs: 4
   start_steps: 4000
   warmup_updates_after: 2000

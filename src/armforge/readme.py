@@ -13,7 +13,7 @@ from pathlib import Path
 from .config import AlgoConfig, EnvConfig, TaskConfig, TrainConfig
 from .report import legacy_section
 
-REPO = "rezaxr14/3D-Robot-Control-RL-Analytical"
+REPO = "rezaxr14/ArmLab_Robot_RL"
 BRANCH = "main"
 COLAB = f"https://colab.research.google.com/github/{REPO}/blob/{BRANCH}/notebooks/armforge_control_panel.ipynb"
 
@@ -34,6 +34,11 @@ TASK_BLURBS = {
         "Grasp the cube with the 2F-85, lift it, and put it at a goal on the table, in the air, or (in the "
         "cluttered variant) inside a walled tray among loose distractor cubes. Needs a real grasp: pad friction, "
         "finger linkage compliance and grip force all matter.",
+    ),
+    "pickplace_clutter": (
+        "Pick and place (cluttered)",
+        "The same grasp-and-place task in the hard scene: a walled tray as the place target, two loose distractor "
+        "cubes that can be knocked around, and full domain randomisation.",
     ),
 }
 
@@ -169,11 +174,11 @@ def top_section(media_root: str | Path = "docs/media") -> str:
             "*Publish* cell (or `armforge publish`). Nothing here is a mock-up.",
             "",
         ]
-    for task in TASK_BLURBS:
+    for task in ("reach", "push", "pickplace"):
         parts.append(_results_for(task, media_root))
     clutter = media_root / "pickplace_clutter"
     if (clutter / "manifest.json").exists():
-        parts.append(_results_for("pickplace_clutter", media_root) if "pickplace_clutter" in TASK_BLURBS else "")
+        parts.append(_results_for("pickplace_clutter", media_root))
     parts += [
         "## The robot and the physics",
         "",
@@ -214,7 +219,7 @@ def top_section(media_root: str | Path = "docs/media") -> str:
         "**Local:**",
         "",
         "```bash",
-        "git clone https://github.com/" + REPO + ".git && cd 3D-Robot-Control-RL-Analytical",
+        "git clone https://github.com/" + REPO + ".git && cd ArmLab_Robot_RL",
         "python -m pip install -e \".[dev]\"          # numpy, mujoco, torch, imageio, matplotlib, ...",
         "armforge doctor                               # checks mujoco, torch/CUDA, rendering and the Menagerie download",
         "armforge scene --task pickplace --out docs/media/scene_gallery.png",

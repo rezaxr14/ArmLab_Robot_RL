@@ -4,7 +4,7 @@
 
 ![ArmForge hero](docs/media/pickplace/progression.gif)
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rezaxr14/3D-Robot-Control-RL-Analytical/blob/main/notebooks/armforge_control_panel.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rezaxr14/ArmLab_Robot_RL/blob/main/notebooks/armforge_control_panel.ipynb)
 
 The whole project is driven from one notebook - [`notebooks/armforge_control_panel.ipynb`](notebooks/armforge_control_panel.ipynb): configure, inspect the scene, train, monitor, evaluate, render the *failing -> learning -> solved* media, and regenerate this README.
 
@@ -129,7 +129,7 @@ Why these pieces: sparse rewards give no signal until the arm happens to succeed
 **Local:**
 
 ```bash
-git clone https://github.com/rezaxr14/3D-Robot-Control-RL-Analytical.git && cd 3D-Robot-Control-RL-Analytical
+git clone https://github.com/rezaxr14/ArmLab_Robot_RL.git && cd ArmLab_Robot_RL
 python -m pip install -e ".[dev]"          # numpy, mujoco, torch, imageio, matplotlib, ...
 armforge doctor                               # checks mujoco, torch/CUDA, rendering and the Menagerie download
 armforge scene --task pickplace --out docs/media/scene_gallery.png

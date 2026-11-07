@@ -3,13 +3,23 @@ name: push
 out_dir: runs
 env:
   seed: 0
-  task: {name: push, horizon: 60, success_threshold: 0.04, push_height: 0.02}
+  task:
+    name: push
+    horizon: 60
+    success_threshold: 0.04
+    push_height: 0.02
+    # The pusher needs room *behind* the cube (opposite the goal). The default x half-extent
+    # (0.17 m -> hand clamped at x=0.67) leaves none once the cube drifts to the workspace edge,
+    # so push gets a wider corridor. IK reaches x=0.76 at z=0.02, so 0.25 is still comfortable.
+    workspace_half_extent: [0.25, 0.30]
   physics:
     randomize: {enabled: true}
 train:
-  total_steps: 1500000
+  total_steps: 200000
   num_envs: 4
   buffer_episodes: 26000
   eval_every: 25000
+  log_every: 5000
   milestones: [0.0, 0.02, 0.1, 0.35, 1.0]
-  demos: {episodes: 150, bc_steps: 1500}
+  # The push expert succeeds ~57%; keep a large successful-demo set to warm-start the actor.
+  demos: {episodes: 400, bc_steps: 4000}

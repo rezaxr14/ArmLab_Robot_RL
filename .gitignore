@@ -34,6 +34,12 @@ results/
 !legacy/projects/rl_double_dueling_dqn/qnetwork.pth
 !legacy/docs/assets/*.gif
 !docs/media/**/*.gif
+# published policy weights (best/final + milestone snapshots) live here
+!weights/
+!weights/**/*.pt
+
+# --- MuJoCo/OS noise ---
+MUJOCO_LOG.TXT
 
 # --- OS / editor ---
 .DS_Store
