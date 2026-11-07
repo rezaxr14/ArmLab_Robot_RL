@@ -164,12 +164,12 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
     obs = env.reset(seed=seed, goal_scale=goal_scale)
     expert = make_expert(env)
     expert.reset()
-    O, AG, A, S, trace = [obs["observation"]], [obs["achieved_goal"]], [], [], []
+    obs_list, AG, A, S, trace = [obs["observation"]], [obs["achieved_goal"]], [], [], []
     goal, info, done = obs["desired_goal"], {}, False
     while not done:
         a = np.clip(expert.act() + (rng.normal(0, noise_std, env.action_dim) if noise_std > 0 else 0.0), -1, 1)
         obs, _, done, info = env.step(a)
-        O.append(obs["observation"])
+        obs_list.append(obs["observation"])
         AG.append(obs["achieved_goal"])
         A.append(a)
         S.append(info["shaping"])
@@ -187,7 +187,7 @@ def rollout_expert(env, seed: int, noise_std: float = 0.0, goal_scale: float = 1
             }
         )
     return {
-        "obs": np.stack(O),
+        "obs": np.stack(obs_list),
         "ag": np.stack(AG),
         "goal": goal,
         "act": np.stack(A).astype(np.float32),

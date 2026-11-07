@@ -50,7 +50,7 @@ def test_published_media_shows_real_numbers(tmp_path):
         ]}))
     (d / "progression.gif").write_bytes(b"GIF89a")
     text = top_section(tmp_path)
-    assert "Untrained policy: 3% success" in text and "1,000 steps: 90%" in text
+    assert "Untrained policy: 3% success" in text and "Best evaluated policy: 90% at 1,000 steps" in text
     assert "| 1,000 | final | 90% | 1.2 cm |" in text
     assert "docs/media/reach/progression.gif" in text
     assert "No published run for `reach`" not in text
